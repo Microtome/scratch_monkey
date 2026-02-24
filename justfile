@@ -5,7 +5,8 @@ base_image := "scratch_dev"
 fedora_image := "scratch_dev_fedora"
 instances_dir := env("HOME") / "scratch-dev"
 
-# CLI overrides for run (e.g., just wayland=true run myproject)
+# Flags
+fedora := ""
 wayland := ""
 ssh := ""
 cmd := ""
@@ -13,15 +14,14 @@ _root := ""
 
 scripts := justfile_directory() / "scripts"
 
+# Resolve base image based on fedora flag
+_base := if fedora == "true" { fedora_image } else { base_image }
+
 # ─── Instance management ─────────────────────────────────────────────────────
 
-# Create a new scratch-dev instance
+# Create a new scratch-dev instance (fedora=true for fedora base)
 create name:
-    @{{scripts}}/create.sh "{{instances_dir}}" "{{name}}" "{{justfile_directory()}}" "{{base_image}}"
-
-# Create a new scratch-dev instance using fedora base
-create-fedora name:
-    @{{scripts}}/create.sh "{{instances_dir}}" "{{name}}" "{{justfile_directory()}}" "{{fedora_image}}"
+    @{{scripts}}/create.sh "{{instances_dir}}" "{{name}}" "{{justfile_directory()}}" "{{_base}}"
 
 # Clone an existing instance (copies Dockerfile + config, fresh home/)
 clone source dest:
@@ -65,19 +65,16 @@ delete name:
 skel name:
     @{{scripts}}/skel.sh "{{instances_dir}}" "{{name}}"
 
-# ─── Edit instance files ──────────────────────────────────────────────────────
-
-# Edit an instance's config
-edit-config name:
-    ${EDITOR:-vi} "{{instances_dir}}/{{name}}/scratch.toml"
-
-# Edit an instance's Dockerfile
-edit-dockerfile name:
-    ${EDITOR:-vi} "{{instances_dir}}/{{name}}/Dockerfile"
-
-# Edit an instance's .env file
-edit-env name:
-    ${EDITOR:-vi} "{{instances_dir}}/{{name}}/.env"
+# Edit an instance file: config, dockerfile, or env
+edit name file="config":
+    #!/usr/bin/env bash
+    dir="{{instances_dir}}/{{name}}"
+    case "{{file}}" in
+        config)     ${EDITOR:-vi} "$dir/scratch.toml" ;;
+        dockerfile) ${EDITOR:-vi} "$dir/Dockerfile" ;;
+        env)        ${EDITOR:-vi} "$dir/.env" ;;
+        *)          echo "Unknown file '{{file}}'. Use: config, dockerfile, or env"; exit 1 ;;
+    esac
 
 # ─── Info ─────────────────────────────────────────────────────────────────────
 
@@ -87,25 +84,20 @@ list:
 
 # ─── Build ────────────────────────────────────────────────────────────────────
 
-# Build the base scratch_dev image
+# Build a base image (fedora=true for fedora base)
 build:
     #!/usr/bin/env bash
     set -euo pipefail
-    if podman image exists "{{base_image}}"; then
-        read -rp "Base image '{{base_image}}' already exists. Rebuild? [y/N] " answer
+    image="{{_base}}"
+    if podman image exists "$image"; then
+        read -rp "Image '$image' already exists. Rebuild? [y/N] " answer
         [[ "$answer" =~ ^[Yy]$ ]] || exit 0
     fi
-    podman build -t "{{base_image}}" "{{justfile_directory()}}"
-
-# Build the fedora base image
-build-fedora:
-    #!/usr/bin/env bash
-    set -euo pipefail
-    if podman image exists "{{fedora_image}}"; then
-        read -rp "Fedora image '{{fedora_image}}' already exists. Rebuild? [y/N] " answer
-        [[ "$answer" =~ ^[Yy]$ ]] || exit 0
+    if [[ "{{fedora}}" == "true" ]]; then
+        podman build -t "$image" -f "{{justfile_directory()}}/Dockerfile.fedora" "{{justfile_directory()}}"
+    else
+        podman build -t "$image" "{{justfile_directory()}}"
     fi
-    podman build -t "{{fedora_image}}" -f "{{justfile_directory()}}/Dockerfile.fedora" "{{justfile_directory()}}"
 
 # Build an instance's Dockerfile (tagged as the instance name)
 build-instance name:

@@ -34,8 +34,8 @@ just enter myproject
 ### Fedora-based instance
 
 ```bash
-just build-fedora
-just create-fedora myproject
+just fedora=true build
+just fedora=true create myproject
 just enter myproject
 ```
 
@@ -43,8 +43,8 @@ just enter myproject
 
 ```bash
 # Create instances
-just create myproject           # scratch base
-just create-fedora myproject    # fedora base
+just create myproject               # scratch base
+just fedora=true create myproject   # fedora base
 
 # Copy shell config files (.bashrc, etc.) from /etc/skel
 just skel myproject
@@ -56,9 +56,9 @@ just list
 just clone myproject myproject-v2
 
 # Edit instance files
-just edit-config myproject      # scratch.toml
-just edit-dockerfile myproject  # Dockerfile
-just edit-env myproject         # .env secrets
+just edit myproject                 # scratch.toml (default)
+just edit myproject dockerfile      # Dockerfile
+just edit myproject env             # .env secrets
 
 # Delete an instance
 just delete myproject
@@ -155,23 +155,19 @@ Fedora instances use their own filesystem — no host system mounts.
 
 | Recipe | Description |
 |--------|-------------|
-| `just build` | Build the scratch base image |
-| `just build-fedora` | Build the fedora base image |
+| `just build` | Build the base image (`fedora=true` for fedora) |
 | `just build-instance <name>` | Build an instance's Dockerfile |
-| `just create <name>` | Create a scratch instance |
-| `just create-fedora <name>` | Create a fedora instance |
+| `just create <name>` | Create an instance (`fedora=true` for fedora) |
 | `just clone <src> <dest>` | Clone an instance |
 | `just delete <name>` | Delete an instance |
-| `just edit-config <name>` | Edit instance config |
-| `just edit-dockerfile <name>` | Edit instance Dockerfile |
-| `just edit-env <name>` | Edit instance .env file |
+| `just edit <name> [file]` | Edit config (default), dockerfile, or env |
 | `just skel <name>` | Copy /etc/skel configs into instance home |
 | `just list` | List all instances |
 | `just run <name> [cmd]` | Run an instance |
 | `just enter <name>` | Interactive shell |
 | `just enter-root <name>` | Interactive root shell |
 | `just shell <name>` | Alias for run |
-| `just clean` | Remove the scratch base image |
+| `just clean` | Remove the base image |
 | `just clean-instance <name>` | Remove an instance's image |
 | `just status` | Show status |
 
