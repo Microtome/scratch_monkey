@@ -86,6 +86,34 @@ delete name:
     rm -rf "$dir"
     echo "Deleted instance '{{name}}'"
 
+# Copy skeleton bash config files from /etc/skel into instance home
+skel name:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    dir="{{instances_dir}}/{{name}}"
+    if [[ ! -d "$dir" ]]; then
+        echo "Error: instance '{{name}}' not found at $dir"
+        exit 1
+    fi
+    home_dir="$dir/home"
+    copied=0
+    for f in /etc/skel/.*; do
+        base=$(basename "$f")
+        [[ "$base" == "." || "$base" == ".." ]] && continue
+        if [[ -e "$home_dir/$base" ]]; then
+            echo "  Skipping $base (already exists)"
+        else
+            cp -a "$f" "$home_dir/$base"
+            echo "  Copied $base"
+            copied=$((copied + 1))
+        fi
+    done
+    if [[ $copied -eq 0 ]]; then
+        echo "No new files copied (all already exist)."
+    else
+        echo "Copied $copied file(s) from /etc/skel to $home_dir"
+    fi
+
 # List all instances
 list:
     #!/usr/bin/env bash
