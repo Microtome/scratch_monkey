@@ -55,6 +55,11 @@ just list
 # Clone an instance (copies config + Dockerfile, fresh home dir)
 just clone myproject myproject-v2
 
+# Edit instance files
+just edit-config myproject      # scratch.toml
+just edit-dockerfile myproject  # Dockerfile
+just edit-env myproject         # .env secrets
+
 # Delete an instance
 just delete myproject
 ```
@@ -157,6 +162,9 @@ Fedora instances use their own filesystem — no host system mounts.
 | `just create-fedora <name>` | Create a fedora instance |
 | `just clone <src> <dest>` | Clone an instance |
 | `just delete <name>` | Delete an instance |
+| `just edit-config <name>` | Edit instance config |
+| `just edit-dockerfile <name>` | Edit instance Dockerfile |
+| `just edit-env <name>` | Edit instance .env file |
 | `just skel <name>` | Copy /etc/skel configs into instance home |
 | `just list` | List all instances |
 | `just run <name> [cmd]` | Run an instance |

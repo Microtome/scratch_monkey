@@ -65,6 +65,22 @@ delete name:
 skel name:
     @{{scripts}}/skel.sh "{{instances_dir}}" "{{name}}"
 
+# ─── Edit instance files ──────────────────────────────────────────────────────
+
+# Edit an instance's config
+edit-config name:
+    ${EDITOR:-vi} "{{instances_dir}}/{{name}}/scratch.toml"
+
+# Edit an instance's Dockerfile
+edit-dockerfile name:
+    ${EDITOR:-vi} "{{instances_dir}}/{{name}}/Dockerfile"
+
+# Edit an instance's .env file
+edit-env name:
+    ${EDITOR:-vi} "{{instances_dir}}/{{name}}/.env"
+
+# ─── Info ─────────────────────────────────────────────────────────────────────
+
 # List all instances
 list:
     @{{scripts}}/list.sh "{{instances_dir}}"
