@@ -2,7 +2,7 @@
 
 ## Overview
 
-Port `run.sh` to a `justfile` with an instance-based workflow. Each scratch-dev instance is a named environment with its own home directory, Dockerfile, and config file. All instances live under `$HOME/scratch-dev/`. Targeting rootless podman on Fedora/ostree. No Python; all logic is inline bash within justfile recipes.
+Port `run.sh` to a `justfile` with an instance-based workflow. Each scratch-dev instance is a named environment with its own home directory, Dockerfile, config file, and optional secrets. Instances live under `$HOME/scratch-dev/`. Supports both a `scratch` base image (host mounts) and a `fedora:latest` base (self-contained). Targeting rootless podman on Fedora/ostree. No Python; large recipes are extracted to `scripts/`.
 
 ## Directory Layout
 
@@ -12,10 +12,16 @@ Port `run.sh` to a `justfile` with an instance-based workflow. Each scratch-dev 
 scratch_dev/                    # This git repo
   justfile                      # Primary interface — all recipes
   Dockerfile                    # Base scratch image
+  Dockerfile.fedora             # Base fedora image
   scratch.toml.default          # Template config with all options commented out
+  scripts/
+    create.sh                   # Instance creation logic
+    run.sh                      # Container launch logic
+    list.sh                     # Instance listing
+    skel.sh                     # Skeleton file copying
   specs/
     redesign.md                 # This document
-  README.md                     # Updated usage docs
+  README.md                     # Usage docs
 ```
 
 ### User instances (`$HOME/scratch-dev/`)
@@ -24,12 +30,14 @@ scratch_dev/                    # This git repo
 $HOME/scratch-dev/
   myproject/                    # Instance created via: just create myproject
     home/                       # Container home directory (mounted rw)
-    Dockerfile                  # Customizable, FROM scratch_dev
+    Dockerfile                  # Customizable, FROM scratch_dev or scratch_dev_fedora
     scratch.toml                # Instance config (all options, defaults commented out)
+    .env                        # Environment variables / secrets (KEY=VALUE format)
   work-env/                     # Another instance
     home/
     Dockerfile
     scratch.toml
+    .env
 ```
 
 ## Instance Config: `scratch.toml`
@@ -45,19 +53,34 @@ Generated from `scratch.toml.default` when an instance is created. All values ar
 # Sharing options
 # wayland = false
 # ssh = false
-# brew = false
 
 # Custom home directory (overrides the instance home/ dir)
 # home = ""
 
 # Extra volume mounts (host:container:mode)
 # volumes = []
+#
+# Example: mount Homebrew (Linuxbrew) read-only
+# volumes = ["/home/linuxbrew/.linuxbrew:/home/linuxbrew/.linuxbrew:ro"]
 
 # Extra environment variables
 # env = []
 ```
 
-When a value is uncommented, it overrides the default. The justfile parses this with simple grep/sed (TOML subset — flat key/value only, no nested tables).
+When a value is uncommented, it overrides the default. The run script parses this with simple grep/sed (TOML subset — flat key/value only, no nested tables).
+
+## Justfile Variables (Flags)
+
+All passed as `just var=value recipe`:
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `fedora` | `""` | Set to `true` to use the fedora base image |
+| `skel` | `""` | Set to `true` to copy /etc/skel configs on create |
+| `root` | `""` | Set to `true` to run as root (drops `--userns=keep-id`) |
+| `wayland` | `""` | Set to `true` to override wayland config |
+| `ssh` | `""` | Set to `true` to override ssh config |
+| `cmd` | `""` | Override the command to run |
 
 ## Justfile Recipes
 
@@ -65,19 +88,32 @@ When a value is uncommented, it overrides the default. The justfile parses this 
 
 | Recipe | Purpose |
 |--------|---------|
-| `create name` | Create a new instance (dir, home/, Dockerfile, scratch.toml) |
-| `clone source dest` | Clone an existing instance (copies Dockerfile + scratch.toml, creates fresh home/) |
+| `create name` | Create a new instance (`fedora=true` for fedora base, `skel=true` to copy shell configs) |
+| `clone source dest` | Clone an existing instance (copies Dockerfile + scratch.toml + .env, creates fresh home/) |
 | `delete name` | Delete an instance (prompts for confirmation, removes dir + image) |
-| `list` | List all instances and their status |
+| `skel name` | Copy /etc/skel bash configs into instance home |
+| `edit name [file]` | Edit instance file: `config` (default), `dockerfile`, or `env` |
 
-### Build & Run
+### Info
 
 | Recipe | Purpose |
 |--------|---------|
-| `build` | Build the base `scratch_dev` image |
-| `build-instance name` | Build an instance's Dockerfile (tagged as `name`) |
-| `run name` | Launch a container for the named instance |
-| `shell name` | Alias for `run` with `/bin/bash` |
+| `list` | List all instances with status |
+
+### Build
+
+| Recipe | Purpose |
+|--------|---------|
+| `build` | Build the base image (`fedora=true` for fedora) |
+| `build-instance name` | Build an instance's Dockerfile (auto-detects base, tagged as `name`) |
+
+### Run
+
+| Recipe | Purpose |
+|--------|---------|
+| `run name [args]` | Launch a container for the named instance |
+| `shell name [args]` | Alias for `run` |
+| `enter name` | Interactive shell (`root=true` for root) |
 
 ### Maintenance
 
@@ -93,19 +129,38 @@ When a value is uncommented, it overrides the default. The justfile parses this 
 # Build the base image (auto-builds on first run if missing)
 just build
 
-# Create a new instance
-just create myproject
+# Build the fedora base image
+just fedora=true build
 
-# Customize the instance (edit Dockerfile and/or config)
-$EDITOR ~/scratch-dev/myproject/Dockerfile
-$EDITOR ~/scratch-dev/myproject/scratch.toml
+# Create a new instance (scratch base, with shell configs)
+just skel=true create myproject
+
+# Create a fedora-based instance
+just skel=true fedora=true create myproject
+
+# Edit instance files
+just edit myproject                 # scratch.toml (default)
+just edit myproject dockerfile      # Dockerfile
+just edit myproject env             # .env secrets
 
 # Build and run the instance
 just build-instance myproject
 just run myproject
 
-# Run with flag overrides (override config values from CLI)
-just run myproject wayland=true ssh=true
+# Interactive shell
+just enter myproject
+
+# Root shell
+just root=true enter myproject
+
+# Run with flag overrides
+just wayland=true ssh=true run myproject
+
+# Run a specific command
+just run myproject "echo hello && whoami"
+
+# Copy skeleton configs to existing instance
+just skel myproject
 
 # Clone an instance
 just clone myproject myproject-v2
@@ -115,9 +170,6 @@ just list
 
 # Delete an instance
 just delete myproject
-
-# Run a specific command
-just run myproject -- -c "echo hello"
 ```
 
 ## Instance Lifecycle
@@ -128,20 +180,19 @@ just run myproject -- -c "echo hello"
 2. Creates `$HOME/scratch-dev/myproject/home/`
 3. Copies `scratch.toml.default` → `$HOME/scratch-dev/myproject/scratch.toml`
 4. Generates `$HOME/scratch-dev/myproject/Dockerfile`:
-   ```dockerfile
-   FROM scratch_dev
-   # Add your customizations here.
-   # COPY and ADD work. RUN does not (no shell in image).
-   # Use multi-stage builds to pull binaries from other images.
-   ```
-5. Prints instructions for next steps
+   - Scratch: `FROM scratch_dev` with note that RUN does not work
+   - Fedora: `FROM scratch_dev_fedora` with note that RUN/COPY/ADD all work
+5. Creates empty `.env` file
+6. Prints instructions for next steps (using `just edit` and `just enter`)
+
+If `skel=true`, also copies /etc/skel dotfiles into the home directory.
 
 ### `just clone myproject myproject-v2`
 
 1. Verifies source instance exists
 2. Creates `$HOME/scratch-dev/myproject-v2/`
 3. Creates `$HOME/scratch-dev/myproject-v2/home/` (fresh, empty)
-4. Copies `Dockerfile` and `scratch.toml` from source
+4. Copies `Dockerfile`, `scratch.toml`, and `.env` from source
 5. Does **not** copy the source home directory (clean slate)
 
 ### `just delete myproject`
@@ -155,14 +206,14 @@ just run myproject -- -c "echo hello"
 Shows all instances with status:
 
 ```
-INSTANCE        IMAGE BUILT     CONFIG
-myproject       yes             wayland=true, ssh=true
-work-env        no              (defaults)
+INSTANCE             IMAGE BUILT     DIRECTORY                                CONFIG
+myproject            yes             /var/home/user/scratch-dev/myproject     wayland=true, ssh=true
+work-env             no              /var/home/user/scratch-dev/work-env      (defaults)
 ```
 
 ## Feature Flags
 
-Flags can be set in `scratch.toml` per-instance, or overridden on the CLI via `just run name key=value`.
+Flags can be set in `scratch.toml` per-instance, or overridden on the CLI via `just key=value run name`.
 
 ### Wayland Socket Sharing (`wayland = true`)
 
@@ -189,37 +240,34 @@ Forwards the host SSH agent so `ssh`, `git` over SSH, etc. work with the host's 
 
 Warns and skips if `SSH_AUTH_SOCK` is not set or the socket is missing.
 
-### Homebrew Sharing (`brew = true`)
+### Homebrew (via volumes config)
 
-Mounts the host's Homebrew (Linuxbrew) installation read-only.
+Homebrew is not a built-in flag. Instead, use the `volumes` config in `scratch.toml`:
 
-**Mounts:**
-- `/home/linuxbrew/.linuxbrew` or `~/.linuxbrew` → same path, read-only
-
-**Environment:** None. Users configure their shell rc files to add brew to PATH:
-```bash
-eval "$(/home/linuxbrew/.linuxbrew/bin/brew shellenv)"
+```toml
+volumes = ["/home/linuxbrew/.linuxbrew:/home/linuxbrew/.linuxbrew:ro"]
 ```
 
-Detection order: `/home/linuxbrew/.linuxbrew` first, then `$HOME/.linuxbrew`. Warns if neither found.
+Users configure their shell rc files to add brew to PATH.
+
+## Secrets: `.env` File
+
+Each instance has a `.env` file for environment variables and secrets (KEY=VALUE format, one per line). Loaded via `podman run --env-file`. This keeps secrets out of the Dockerfile and scratch.toml.
+
+## Root Access
+
+Rootless podman uses `--userns=keep-id` for correct user mapping, which means sudo/setuid doesn't work. Use `just root=true enter myproject` to drop `--userns=keep-id` and run as root.
 
 ## Dockerfile Customization
 
-### Base Image
+### Base Images
 
-The `Dockerfile` in this repo builds the `scratch_dev` base image — a `scratch` image with only filesystem symlinks (`/bin` → `usr/bin`, etc.) and empty mount-point directories.
+- **`scratch_dev`**: Empty `scratch` image with Fedora ostree symlinks (`/bin` → `usr/bin`, etc.) and empty mount-point directories. Host provides all executables via bind mounts at runtime.
+- **`scratch_dev_fedora`**: Full `fedora:latest` image. Self-contained, no host mounts needed.
 
-### Instance Dockerfiles
+### Scratch Instance Dockerfiles
 
-Each instance gets its own Dockerfile that starts with `FROM scratch_dev`. Users can add layers:
-
-- `COPY` / `ADD` static files, configs, binaries
-- Multi-stage builds to pull binaries from other images
-- Set `ENV`, `WORKDIR`, `ENTRYPOINT`, `CMD`
-
-`RUN` does **not** work (no shell in the image). This is by design — the host provides all executables via bind mounts at runtime.
-
-### Example: Adding a Go tool
+`RUN` does **not** work (no shell in the image). Use `COPY`/`ADD` or multi-stage builds:
 
 ```dockerfile
 FROM golang:latest AS builder
@@ -229,49 +277,72 @@ FROM scratch_dev
 COPY --from=builder /go/bin/tool /usr/local/bin/tool
 ```
 
-## Core `run` Recipe Design
+### Fedora Instance Dockerfiles
 
-The `run` recipe for a named instance:
+Full OS available — `RUN`, `COPY`, `ADD` all work:
+
+```dockerfile
+FROM scratch_dev_fedora
+RUN dnf install -y git vim
+```
+
+Build with `just build-instance myproject`, then run normally.
+
+## Core Run Logic (`scripts/run.sh`)
+
+The run script for a named instance:
 
 1. Reads `$HOME/scratch-dev/<name>/scratch.toml` for config values
-2. Applies CLI overrides (e.g., `wayland=true`)
-3. Determines the image: if instance image `<name>` exists, use it; otherwise fall back to `scratch_dev` base
+2. Applies CLI overrides (wayland, ssh, cmd)
+3. Determines the image: if instance image `<name>` exists, use it; otherwise detect base from Dockerfile FROM line, fall back to `scratch_dev`
 4. Auto-builds base image if missing
-5. Assembles podman arguments
+5. Detects if instance is fedora-based (from Dockerfile FROM line)
+6. Assembles podman arguments
 
 **Always applied:**
 - `--rm -it`
-- `--userns=keep-id` (correct user mapping in rootless podman)
 - `--security-opt label=disable` (SELinux bypass for host mounts)
 - `--network=host`
 - `-e HOME=<home>`
+- Home directory mounted rw
+
+**Scratch instances only (skipped for fedora):**
 - Host mounts: `/usr`, `/etc`, `/var/usrlocal`, `/var/opt`, `/usr/local` (all `:ro`)
-- Home directory: `$HOME/scratch-dev/<name>/home` mounted rw (or custom `home` from config)
+
+**Unless `root=true`:**
+- `--userns=keep-id` (correct user mapping in rootless podman)
 
 **Conditionally applied based on flags:**
 - Wayland mounts + env vars
 - SSH socket mount + env var
-- Homebrew directory mount
+- `.env` file via `--env-file`
+- Extra volumes from `scratch.toml`
+- Extra env vars from `scratch.toml`
 
 ## Config Parsing
 
 The TOML config is a flat key/value format (no nested tables). Parsing is done with grep/sed in bash:
 
 ```bash
-get_config() {
-    local file="$1" key="$2" default="$3"
+get() {
+    local key="$1" default="$2" override="$3"
+    if [[ -n "$override" ]]; then
+        echo "$override"
+        return
+    fi
     local val
-    val=$(grep -E "^${key}\s*=" "$file" 2>/dev/null | sed 's/^[^=]*=\s*//' | tr -d '"' | tr -d "'" | xargs)
+    val=$(grep -E "^${key}\s*=" "$conf" 2>/dev/null | sed 's/^[^=]*=\s*//' | tr -d '"' | tr -d "'" | xargs)
     echo "${val:-$default}"
 }
 ```
 
-Commented lines (`# key = value`) are ignored by the `^key` anchor. This handles the simple subset we need without requiring a TOML parser.
+Commented lines (`# key = value`) are ignored by the `^key` anchor. CLI overrides take precedence. This handles the simple subset we need without requiring a TOML parser.
 
 ## Implementation Order
 
 1. Create `specs/redesign.md` (this document)
 2. Create `scratch.toml.default`
 3. Create `justfile` with all recipes
-4. Update `README.md` for new usage
-5. Remove `run.sh`
+4. Create `scripts/` with extracted bash scripts
+5. Update `README.md` for new usage
+6. Remove old `run.sh`

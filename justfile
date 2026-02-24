@@ -113,10 +113,17 @@ build-instance name:
         echo "Error: instance '{{name}}' not found at $dir"
         exit 1
     fi
+    # Detect base image from instance Dockerfile
+    instance_base=$(grep -E '^FROM\s+' "$dir/Dockerfile" 2>/dev/null | tail -1 | awk '{print $2}')
+    base="${instance_base:-{{base_image}}}"
     # Ensure base image exists
-    if ! podman image exists "{{base_image}}"; then
-        echo "Base image '{{base_image}}' not found, building..."
-        podman build -t "{{base_image}}" "{{justfile_directory()}}"
+    if ! podman image exists "$base"; then
+        echo "Base image '$base' not found, building..."
+        if [[ "$base" == *fedora* ]]; then
+            podman build -t "$base" -f "{{justfile_directory()}}/Dockerfile.fedora" "{{justfile_directory()}}"
+        else
+            podman build -t "$base" "{{justfile_directory()}}"
+        fi
     fi
     podman build -t "{{name}}" -f "$dir/Dockerfile" "$dir"
 
