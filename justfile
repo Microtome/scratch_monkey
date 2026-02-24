@@ -7,10 +7,11 @@ instances_dir := env("HOME") / "scratch-dev"
 
 # Flags
 fedora := ""
+skel := ""
+root := ""
 wayland := ""
 ssh := ""
 cmd := ""
-_root := ""
 
 scripts := justfile_directory() / "scripts"
 
@@ -19,9 +20,13 @@ _base := if fedora == "true" { fedora_image } else { base_image }
 
 # ─── Instance management ─────────────────────────────────────────────────────
 
-# Create a new scratch-dev instance (fedora=true for fedora base)
+# Create a new scratch-dev instance (fedora=true for fedora base, skel=true to copy shell configs)
 create name:
-    @{{scripts}}/create.sh "{{instances_dir}}" "{{name}}" "{{justfile_directory()}}" "{{_base}}"
+    #!/usr/bin/env bash
+    "{{scripts}}/create.sh" "{{instances_dir}}" "{{name}}" "{{justfile_directory()}}" "{{_base}}"
+    if [[ "{{skel}}" == "true" ]]; then
+        "{{scripts}}/skel.sh" "{{instances_dir}}" "{{name}}"
+    fi
 
 # Clone an existing instance (copies Dockerfile + config, fresh home/)
 clone source dest:
@@ -119,19 +124,15 @@ build-instance name:
 
 # Run a scratch-dev instance
 run name *args="":
-    @{{scripts}}/run.sh "{{instances_dir}}" "{{base_image}}" "{{justfile_directory()}}" "{{name}}" "{{_root}}" "{{wayland}}" "{{ssh}}" "{{cmd}}" {{args}}
+    @{{scripts}}/run.sh "{{instances_dir}}" "{{base_image}}" "{{justfile_directory()}}" "{{name}}" "{{root}}" "{{wayland}}" "{{ssh}}" "{{cmd}}" {{args}}
 
 # Convenience alias for interactive shell
 shell name *args="":
     just run {{name}} {{args}}
 
-# Drop into an interactive bash shell in the instance
+# Drop into an interactive shell (root=true for root shell)
 enter name:
-    just run {{name}}
-
-# Drop into an interactive root shell in the instance
-enter-root name:
-    just _root=true run {{name}}
+    just _root={{root}} run {{name}}
 
 # ─── Maintenance ──────────────────────────────────────────────────────────────
 

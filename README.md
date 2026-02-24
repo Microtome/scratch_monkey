@@ -21,11 +21,8 @@ Each scratch-dev **instance** is a named environment with its own home directory
 # Build the base image
 just build
 
-# Create an instance
-just create myproject
-
-# Copy shell configs from /etc/skel
-just skel myproject
+# Create an instance with shell configs
+just skel=true create myproject
 
 # Run it
 just enter myproject
@@ -35,7 +32,7 @@ just enter myproject
 
 ```bash
 just fedora=true build
-just fedora=true create myproject
+just skel=true fedora=true create myproject
 just enter myproject
 ```
 
@@ -43,10 +40,12 @@ just enter myproject
 
 ```bash
 # Create instances
-just create myproject               # scratch base
-just fedora=true create myproject   # fedora base
+just create myproject                       # scratch base
+just fedora=true create myproject           # fedora base
+just skel=true create myproject             # with shell configs
+just skel=true fedora=true create myproject # both
 
-# Copy shell config files (.bashrc, etc.) from /etc/skel
+# Copy shell configs to an existing instance
 just skel myproject
 
 # List all instances
@@ -80,7 +79,7 @@ just enter myproject
 just run myproject "echo hello && whoami"
 
 # Root shell (drops --userns=keep-id)
-just enter-root myproject
+just root=true enter myproject
 
 # Override config flags from the CLI
 just wayland=true ssh=true run myproject
@@ -157,15 +156,14 @@ Fedora instances use their own filesystem — no host system mounts.
 |--------|-------------|
 | `just build` | Build the base image (`fedora=true` for fedora) |
 | `just build-instance <name>` | Build an instance's Dockerfile |
-| `just create <name>` | Create an instance (`fedora=true` for fedora) |
+| `just create <name>` | Create an instance (`fedora=true`, `skel=true`) |
 | `just clone <src> <dest>` | Clone an instance |
 | `just delete <name>` | Delete an instance |
 | `just edit <name> [file]` | Edit config (default), dockerfile, or env |
 | `just skel <name>` | Copy /etc/skel configs into instance home |
 | `just list` | List all instances |
 | `just run <name> [cmd]` | Run an instance |
-| `just enter <name>` | Interactive shell |
-| `just enter-root <name>` | Interactive root shell |
+| `just enter <name>` | Interactive shell (`root=true` for root) |
 | `just shell <name>` | Alias for run |
 | `just clean` | Remove the base image |
 | `just clean-instance <name>` | Remove an instance's image |
@@ -176,4 +174,4 @@ Fedora instances use their own filesystem — no host system mounts.
 - Requires **podman** (uses `--userns=keep-id` for correct user mapping)
 - SELinux labeling is disabled for the container (`--security-opt label=disable`)
 - Host networking is enabled (`--network=host`)
-- Use `enter-root` when you need root access (sudo doesn't work in user namespaces)
+- Use `root=true enter` when you need root access (sudo doesn't work in user namespaces)
