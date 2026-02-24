@@ -39,11 +39,13 @@ create name:
     DOCKERFILE
     # Trim leading whitespace from heredoc
     sed -i 's/^    //' "$dir/Dockerfile"
+    touch "$dir/.env"
     echo "Created instance '{{name}}' at $dir"
     echo ""
     echo "Next steps:"
     echo "  Edit config:      \$EDITOR $dir/scratch.toml"
     echo "  Edit Dockerfile:  \$EDITOR $dir/Dockerfile"
+    echo "  Add secrets:      \$EDITOR $dir/.env"
     echo "  Run:              just run {{name}}"
 
 # Clone an existing instance (copies Dockerfile + config, fresh home/)
@@ -63,6 +65,7 @@ clone source dest:
     mkdir -p "$dst/home"
     cp "$src/Dockerfile" "$dst/Dockerfile"
     cp "$src/scratch.toml" "$dst/scratch.toml"
+    [[ -f "$src/.env" ]] && cp "$src/.env" "$dst/.env" || touch "$dst/.env"
     echo "Cloned '{{source}}' → '{{dest}}' (fresh home directory)"
 
 # Delete an instance (removes directory + image)
@@ -251,6 +254,11 @@ run name *args="":
         else
             echo "Warning: No Homebrew installation found, skipping."
         fi
+    fi
+
+    # .env file
+    if [[ -f "$dir/.env" ]]; then
+        podman_args+=(--env-file "$dir/.env")
     fi
 
     # Extra volumes from config
