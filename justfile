@@ -9,6 +9,7 @@ wayland := ""
 ssh := ""
 brew := ""
 cmd := ""
+_root := ""
 
 # ─── Config parsing ──────────────────────────────────────────────────────────
 
@@ -203,7 +204,6 @@ run name *args="":
     # Base podman arguments
     podman_args=(
         --rm -it
-        --userns=keep-id
         --security-opt label=disable
         --network=host
         -e "HOME=$home_dir"
@@ -214,6 +214,11 @@ run name *args="":
         -v /var/usrlocal:/usr/local:ro
         -v "$home_dir":"$home_dir"
     )
+
+    # Run as current user unless root mode requested
+    if [[ "{{_root}}" != "true" ]]; then
+        podman_args+=(--userns=keep-id)
+    fi
 
     # Wayland socket sharing
     if [[ "$cfg_wayland" == "true" ]]; then
@@ -285,6 +290,10 @@ shell name *args="":
 # Drop into an interactive bash shell in the instance
 enter name:
     just run {{name}}
+
+# Drop into an interactive root shell in the instance
+enter-root name:
+    just _root=true run {{name}}
 
 # ─── Maintenance ──────────────────────────────────────────────────────────────
 
