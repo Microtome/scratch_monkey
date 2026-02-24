@@ -94,7 +94,7 @@ list:
         echo "No instances found. Create one with: just create <name>"
         exit 0
     fi
-    printf "%-20s %-15s %s\n" "INSTANCE" "IMAGE BUILT" "CONFIG"
+    printf "%-20s %-15s %-40s %s\n" "INSTANCE" "IMAGE BUILT" "DIRECTORY" "CONFIG"
     for instance_dir in "$dir"/*/; do
         [[ -d "$instance_dir" ]] || continue
         name=$(basename "$instance_dir")
@@ -109,7 +109,7 @@ list:
             active=$(grep -E '^[a-z]' "$conf_file" 2>/dev/null | sed 's/\s*=\s*/=/' | tr '\n' ', ' | sed 's/,$//')
             [[ -n "$active" ]] && config="$active"
         fi
-        printf "%-20s %-15s %s\n" "$name" "$built" "$config"
+        printf "%-20s %-15s %-40s %s\n" "$name" "$built" "${instance_dir%/}" "$config"
     done
 
 # ─── Build ────────────────────────────────────────────────────────────────────
