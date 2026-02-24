@@ -1,0 +1,18 @@
+# scratch-dev instance configuration
+
+# Command to run on entry
+# cmd = "/bin/bash"
+
+# Sharing options
+# wayland = false
+# ssh = false
+# brew = false
+
+# Custom home directory (overrides the instance home/ dir)
+# home = ""
+
+# Extra volume mounts (host:container:mode)
+# volumes = []
+
+# Extra environment variables
+# env = []
