@@ -132,7 +132,7 @@ shell name *args="":
 
 # Drop into an interactive shell (root=true for root shell)
 enter name:
-    just _root={{root}} run {{name}}
+    just root={{root}} run {{name}}
 
 # ─── Maintenance ──────────────────────────────────────────────────────────────
 
