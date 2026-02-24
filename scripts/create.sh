@@ -1,10 +1,11 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Usage: create.sh <instances_dir> <name> <project_dir>
+# Usage: create.sh <instances_dir> <name> <project_dir> [base_image]
 instances_dir="$1"
 name="$2"
 project_dir="$3"
+base_image="${4:-scratch_dev}"
 
 dir="$instances_dir/$name"
 if [[ -d "$dir" ]]; then
@@ -13,14 +14,24 @@ if [[ -d "$dir" ]]; then
 fi
 mkdir -p "$dir/home"
 cp "$project_dir/scratch.toml.default" "$dir/scratch.toml"
-cat > "$dir/Dockerfile" <<'DOCKERFILE'
-FROM scratch_dev
+
+if [[ "$base_image" == *fedora* ]]; then
+    cat > "$dir/Dockerfile" <<DOCKERFILE
+FROM $base_image
+# Add your customizations here.
+# Full Fedora base — RUN, COPY, and ADD all work.
+DOCKERFILE
+else
+    cat > "$dir/Dockerfile" <<DOCKERFILE
+FROM $base_image
 # Add your customizations here.
 # COPY and ADD work. RUN does not (no shell in image).
 # Use multi-stage builds to pull binaries from other images.
 DOCKERFILE
+fi
+
 touch "$dir/.env"
-echo "Created instance '$name' at $dir"
+echo "Created instance '$name' at $dir (base: $base_image)"
 echo ""
 echo "Next steps:"
 echo "  Edit config:      \$EDITOR $dir/scratch.toml"

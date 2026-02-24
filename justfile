@@ -2,6 +2,7 @@
 
 # Configurable
 base_image := "scratch_dev"
+fedora_image := "scratch_dev_fedora"
 instances_dir := env("HOME") / "scratch-dev"
 
 # CLI overrides for run (e.g., just wayland=true run myproject)
@@ -16,7 +17,11 @@ scripts := justfile_directory() / "scripts"
 
 # Create a new scratch-dev instance
 create name:
-    @{{scripts}}/create.sh "{{instances_dir}}" "{{name}}" "{{justfile_directory()}}"
+    @{{scripts}}/create.sh "{{instances_dir}}" "{{name}}" "{{justfile_directory()}}" "{{base_image}}"
+
+# Create a new scratch-dev instance using fedora base
+create-fedora name:
+    @{{scripts}}/create.sh "{{instances_dir}}" "{{name}}" "{{justfile_directory()}}" "{{fedora_image}}"
 
 # Clone an existing instance (copies Dockerfile + config, fresh home/)
 clone source dest:
@@ -76,6 +81,16 @@ build:
     fi
     podman build -t "{{base_image}}" "{{justfile_directory()}}"
 
+# Build the fedora base image
+build-fedora:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    if podman image exists "{{fedora_image}}"; then
+        read -rp "Fedora image '{{fedora_image}}' already exists. Rebuild? [y/N] " answer
+        [[ "$answer" =~ ^[Yy]$ ]] || exit 0
+    fi
+    podman build -t "{{fedora_image}}" -f "{{justfile_directory()}}/Dockerfile.fedora" "{{justfile_directory()}}"
+
 # Build an instance's Dockerfile (tagged as the instance name)
 build-instance name:
     #!/usr/bin/env bash
@@ -128,6 +143,8 @@ status:
     echo "=== scratch-dev status ==="
     echo "Base image: {{base_image}}"
     podman image exists "{{base_image}}" && echo "  Built: yes" || echo "  Built: no"
+    echo "Fedora image: {{fedora_image}}"
+    podman image exists "{{fedora_image}}" && echo "  Built: yes" || echo "  Built: no"
     echo "Instances dir: {{instances_dir}}"
     echo ""
     just list

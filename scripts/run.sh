@@ -57,13 +57,24 @@ fi
 if podman image exists "$name" 2>/dev/null; then
     run_image="$name"
 else
-    run_image="$base_image"
+    # Check which base the instance Dockerfile uses
+    instance_base=$(grep -E '^FROM\s+' "$dir/Dockerfile" 2>/dev/null | head -1 | awk '{print $2}')
+    run_image="${instance_base:-$base_image}"
     # Ensure base image exists
     if ! podman image exists "$run_image"; then
         echo "Base image '$run_image' not found, building..."
-        podman build -t "$run_image" "$project_dir"
+        if [[ "$run_image" == *fedora* ]]; then
+            podman build -t "$run_image" -f "$project_dir/Dockerfile.fedora" "$project_dir"
+        else
+            podman build -t "$run_image" "$project_dir"
+        fi
     fi
 fi
+
+# Detect if instance is fedora-based
+is_fedora=false
+instance_base=$(grep -E '^FROM\s+' "$dir/Dockerfile" 2>/dev/null | tail -1 | awk '{print $2}')
+[[ "$instance_base" == *fedora* ]] && is_fedora=true
 
 # Base podman arguments
 podman_args=(
@@ -71,13 +82,19 @@ podman_args=(
     --security-opt label=disable
     --network=host
     -e "HOME=$home_dir"
-    -v /usr:/usr:ro
-    -v /etc:/etc:ro
-    -v /var/usrlocal:/var/usrlocal:ro
-    -v /var/opt:/var/opt:ro
-    -v /var/usrlocal:/usr/local:ro
     -v "$home_dir":"$home_dir"
 )
+
+# Host system mounts (scratch only — fedora has its own)
+if [[ "$is_fedora" == "false" ]]; then
+    podman_args+=(
+        -v /usr:/usr:ro
+        -v /etc:/etc:ro
+        -v /var/usrlocal:/var/usrlocal:ro
+        -v /var/opt:/var/opt:ro
+        -v /var/usrlocal:/usr/local:ro
+    )
+fi
 
 # Run as current user unless root mode requested
 if [[ "$opt_root" != "true" ]]; then
