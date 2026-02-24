@@ -23,6 +23,16 @@ if [[ -z "$USER_HOME" ]]; then
   usage
 fi
 
+# Check if home directory exists
+if [[ ! -d "$USER_HOME" ]]; then
+  read -rp "'$USER_HOME' does not exist. Create it? [y/N] " answer
+  if [[ "$answer" =~ ^[Yy]$ ]]; then
+    mkdir -p "$USER_HOME" || exit 1
+  else
+    exit 1
+  fi
+fi
+
 # Build image if it doesn't exist
 if ! podman image exists "$IMAGE"; then
   echo "Image '$IMAGE' not found, building..."
