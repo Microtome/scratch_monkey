@@ -282,6 +282,10 @@ run name *args="":
 shell name *args="":
     just run {{name}} {{args}}
 
+# Drop into an interactive bash shell in the instance
+enter name:
+    just run {{name}}
+
 # ─── Maintenance ──────────────────────────────────────────────────────────────
 
 # Remove the base image
