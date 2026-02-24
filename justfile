@@ -7,7 +7,6 @@ instances_dir := env("HOME") / "scratch-dev"
 # CLI overrides for run (e.g., just wayland=true run myproject)
 wayland := ""
 ssh := ""
-brew := ""
 cmd := ""
 _root := ""
 
@@ -169,7 +168,6 @@ run name *args="":
     cfg_cmd=$(get "cmd" "/bin/bash" "{{cmd}}")
     cfg_wayland=$(get "wayland" "false" "{{wayland}}")
     cfg_ssh=$(get "ssh" "false" "{{ssh}}")
-    cfg_brew=$(get "brew" "false" "{{brew}}")
     cfg_home=$(get "home" "" "")
 
     # Determine home directory
@@ -243,21 +241,6 @@ run name *args="":
             )
         else
             echo "Warning: SSH_AUTH_SOCK not set or socket missing, skipping."
-        fi
-    fi
-
-    # Homebrew sharing
-    if [[ "$cfg_brew" == "true" ]]; then
-        brew_dir=""
-        if [[ -d /home/linuxbrew/.linuxbrew ]]; then
-            brew_dir="/home/linuxbrew/.linuxbrew"
-        elif [[ -d "$HOME/.linuxbrew" ]]; then
-            brew_dir="$HOME/.linuxbrew"
-        fi
-        if [[ -n "$brew_dir" ]]; then
-            podman_args+=(-v "$brew_dir":"$brew_dir":ro)
-        else
-            echo "Warning: No Homebrew installation found, skipping."
         fi
     fi
 

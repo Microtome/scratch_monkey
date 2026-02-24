@@ -6,13 +6,15 @@
 # Sharing options
 # wayland = false
 # ssh = false
-# brew = false
 
 # Custom home directory (overrides the instance home/ dir)
 # home = ""
 
 # Extra volume mounts (host:container:mode)
 # volumes = []
+#
+# Example: mount Homebrew (Linuxbrew) read-only
+# volumes = ["/home/linuxbrew/.linuxbrew:/home/linuxbrew/.linuxbrew:ro"]
 
 # Extra environment variables
 # env = []
