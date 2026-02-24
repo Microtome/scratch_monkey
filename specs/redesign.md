@@ -28,6 +28,8 @@ scratch_dev/                    # This git repo
 
 ```
 $HOME/scratch-dev/
+  .shared/                      # Shared volumes (created via: just share-create <name>)
+    comms/                      # Mounted at /shared/comms inside containers
   myproject/                    # Instance created via: just create myproject
     home/                       # Container home directory (mounted rw)
     Dockerfile                  # Customizable, FROM scratch_dev or scratch_dev_fedora
@@ -65,6 +67,10 @@ Generated from `scratch.toml.default` when an instance is created. All values ar
 
 # Extra environment variables
 # env = []
+
+# Shared volumes (created via: just share-create <name>)
+# Mounted at /shared/<name> inside the container
+# shared = []
 ```
 
 When a value is uncommented, it overrides the default. The run script parses this with simple grep/sed (TOML subset — flat key/value only, no nested tables).
@@ -114,6 +120,16 @@ All passed as `just var=value recipe`:
 | `run name [args]` | Launch a container for the named instance |
 | `shell name [args]` | Alias for `run` |
 | `enter name` | Interactive shell (`root=true` for root) |
+
+### Shared Volumes
+
+| Recipe | Purpose |
+|--------|---------|
+| `share-create name` | Create a shared volume at `$HOME/scratch-dev/.shared/<name>/` |
+| `share-delete name` | Delete a shared volume (prompts for confirmation) |
+| `share-add name instance` | Add a shared volume to an instance's `shared` list in scratch.toml |
+| `share-remove name instance` | Remove a shared volume from an instance's `shared` list |
+| `share-list` | List all shared volumes and which instances use them |
 
 ### Maintenance
 
@@ -288,6 +304,39 @@ RUN dnf install -y git vim
 
 Build with `just build-instance myproject`, then run normally.
 
+## Shared Volumes
+
+Shared volumes enable communication between scratch-dev instances via a shared filesystem directory. Since containers already use `--network=host`, shared volumes complement that with a simple, reliable IPC channel for files, unix sockets, FIFOs, or databases.
+
+### Directory
+
+Shared volumes live at `$HOME/scratch-dev/.shared/<name>/`. At run time, each name in an instance's `shared` config resolves to a mount at `/shared/<name>` inside the container.
+
+### Config
+
+The `shared` key in `scratch.toml` lists shared volume names:
+
+```toml
+shared = ["comms", "data"]
+```
+
+### Workflow
+
+```bash
+just share-create comms              # creates $HOME/scratch-dev/.shared/comms/
+just share-add comms agent1          # adds "comms" to agent1's scratch.toml
+just share-add comms agent2          # adds "comms" to agent2's scratch.toml
+just enter agent1                    # /shared/comms/ is mounted rw
+just enter agent2                    # /shared/comms/ is mounted rw — same host dir
+just share-list                      # shows all shared volumes
+just share-remove comms agent1       # removes "comms" from agent1's config
+just share-delete comms              # deletes the shared directory
+```
+
+### Run logic
+
+In `scripts/run.sh`, after parsing extra volumes, the `shared` key is parsed using the same grep/sed pattern. For each name, a `-v "$instances_dir/.shared/$name:/shared/$name"` mount is added. Missing shared directories emit a warning and are skipped.
+
 ## Core Run Logic (`scripts/run.sh`)
 
 The run script for a named instance:
@@ -317,6 +366,7 @@ The run script for a named instance:
 - SSH socket mount + env var
 - `.env` file via `--env-file`
 - Extra volumes from `scratch.toml`
+- Shared volumes from `scratch.toml` (mounted at `/shared/<name>`)
 - Extra env vars from `scratch.toml`
 
 ## Config Parsing

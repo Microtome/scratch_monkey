@@ -141,6 +141,151 @@ shell name *args="":
 enter name:
     just root={{root}} run {{name}}
 
+# ─── Shared volumes ───────────────────────────────────────────────────────────
+
+# Create a shared volume
+share-create name:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    shared_dir="{{instances_dir}}/.shared/{{name}}"
+    if [[ -d "$shared_dir" ]]; then
+        echo "Shared volume '{{name}}' already exists at $shared_dir"
+        exit 1
+    fi
+    mkdir -p "$shared_dir"
+    echo "Created shared volume '{{name}}' at $shared_dir"
+
+# Delete a shared volume
+share-delete name:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    shared_dir="{{instances_dir}}/.shared/{{name}}"
+    if [[ ! -d "$shared_dir" ]]; then
+        echo "Error: shared volume '{{name}}' not found at $shared_dir"
+        exit 1
+    fi
+    read -rp "Delete shared volume '{{name}}' and all its data? [y/N] " answer
+    if [[ ! "$answer" =~ ^[Yy]$ ]]; then
+        echo "Cancelled."
+        exit 0
+    fi
+    # Remove from all instance configs
+    for inst_dir in "{{instances_dir}}"/*/; do
+        [[ "$(basename "$inst_dir")" == ".shared" ]] && continue
+        conf="$inst_dir/scratch.toml"
+        [[ -f "$conf" ]] || continue
+        if grep -qE '^shared\s*=' "$conf"; then
+            current=$(grep -E '^shared\s*=' "$conf" | sed 's/^[^=]*=\s*//' | tr -d '[]" ')
+            if echo "$current" | tr ',' '\n' | grep -qx '{{name}}'; then
+                inst=$(basename "$inst_dir")
+                new_list=$(echo "$current" | tr ',' '\n' | grep -vx '{{name}}' | paste -sd,)
+                if [[ -z "$new_list" ]]; then
+                    sed -i '/^shared\s*=/d' "$conf"
+                else
+                    formatted=$(echo "$new_list" | sed 's/,/", "/g')
+                    sed -i 's/^shared\s*=.*/shared = ["'"$formatted"'"]/' "$conf"
+                fi
+                echo "Removed '{{name}}' from instance '$inst'"
+            fi
+        fi
+    done
+    rm -rf "$shared_dir"
+    echo "Deleted shared volume '{{name}}'"
+
+# Add a shared volume to an instance's config
+share-add name instance:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    shared_dir="{{instances_dir}}/.shared/{{name}}"
+    conf="{{instances_dir}}/{{instance}}/scratch.toml"
+    if [[ ! -d "$shared_dir" ]]; then
+        echo "Error: shared volume '{{name}}' does not exist. Run: just share-create {{name}}"
+        exit 1
+    fi
+    if [[ ! -f "$conf" ]]; then
+        echo "Error: instance '{{instance}}' not found"
+        exit 1
+    fi
+    # Check if shared key exists (uncommented)
+    if grep -qE '^shared\s*=' "$conf"; then
+        current=$(grep -E '^shared\s*=' "$conf" | sed 's/^[^=]*=\s*//' | tr -d '[]" ')
+        # Check if already present
+        if echo "$current" | tr ',' '\n' | grep -qx '{{name}}'; then
+            echo "Shared volume '{{name}}' already in {{instance}}'s config"
+            exit 0
+        fi
+        # Append to existing list
+        if [[ -z "$current" ]]; then
+            sed -i 's/^shared\s*=.*/shared = ["{{name}}"]/' "$conf"
+        else
+            new_list=$(echo "$current" | sed 's/,/", "/g')
+            sed -i 's/^shared\s*=.*/shared = ["'"$new_list"'", "{{name}}"]/' "$conf"
+        fi
+    else
+        echo 'shared = ["{{name}}"]' >> "$conf"
+    fi
+    echo "Added shared volume '{{name}}' to instance '{{instance}}'"
+
+# Remove a shared volume from an instance's config
+share-remove name instance:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    conf="{{instances_dir}}/{{instance}}/scratch.toml"
+    if [[ ! -f "$conf" ]]; then
+        echo "Error: instance '{{instance}}' not found"
+        exit 1
+    fi
+    if ! grep -qE '^shared\s*=' "$conf"; then
+        echo "Instance '{{instance}}' has no shared volumes configured"
+        exit 0
+    fi
+    current=$(grep -E '^shared\s*=' "$conf" | sed 's/^[^=]*=\s*//' | tr -d '[]" ')
+    if ! echo "$current" | tr ',' '\n' | grep -qx '{{name}}'; then
+        echo "Shared volume '{{name}}' not in {{instance}}'s config"
+        exit 0
+    fi
+    # Build new list without the removed name
+    new_list=$(echo "$current" | tr ',' '\n' | grep -vx '{{name}}' | paste -sd,)
+    if [[ -z "$new_list" ]]; then
+        sed -i '/^shared\s*=/d' "$conf"
+    else
+        formatted=$(echo "$new_list" | sed 's/,/", "/g')
+        sed -i 's/^shared\s*=.*/shared = ["'"$formatted"'"]/' "$conf"
+    fi
+    echo "Removed shared volume '{{name}}' from instance '{{instance}}'"
+
+# List all shared volumes and which instances use them
+share-list:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    shared_base="{{instances_dir}}/.shared"
+    if [[ ! -d "$shared_base" ]] || [[ -z "$(ls -A "$shared_base" 2>/dev/null)" ]]; then
+        echo "No shared volumes found."
+        exit 0
+    fi
+    printf "%-20s %s\n" "VOLUME" "USED BY"
+    for vol_dir in "$shared_base"/*/; do
+        vol=$(basename "$vol_dir")
+        users=""
+        for inst_dir in "{{instances_dir}}"/*/; do
+            [[ "$(basename "$inst_dir")" == ".shared" ]] && continue
+            conf="$inst_dir/scratch.toml"
+            [[ -f "$conf" ]] || continue
+            if grep -qE '^shared\s*=' "$conf"; then
+                list=$(grep -E '^shared\s*=' "$conf" | sed 's/^[^=]*=\s*//' | tr -d '[]" ')
+                if echo "$list" | tr ',' '\n' | grep -qx "$vol"; then
+                    inst=$(basename "$inst_dir")
+                    if [[ -n "$users" ]]; then
+                        users="$users, $inst"
+                    else
+                        users="$inst"
+                    fi
+                fi
+            fi
+        done
+        printf "%-20s %s\n" "$vol" "${users:-(none)}"
+    done
+
 # ─── Maintenance ──────────────────────────────────────────────────────────────
 
 # Remove the base image

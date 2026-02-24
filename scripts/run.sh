@@ -137,6 +137,18 @@ while IFS= read -r vol; do
     [[ -n "$vol" ]] && podman_args+=(-v "$vol")
 done < <(grep -E '^volumes\s*=' "$conf" 2>/dev/null | sed 's/^[^=]*=\s*//' | tr -d '[]"' | tr ',' '\n' | xargs -I{} echo {})
 
+# Shared volumes from config
+while IFS= read -r name; do
+    if [[ -n "$name" ]]; then
+        shared_path="$instances_dir/.shared/$name"
+        if [[ -d "$shared_path" ]]; then
+            podman_args+=(-v "$shared_path:/shared/$name")
+        else
+            echo "Warning: shared volume '$name' not found at $shared_path, skipping."
+        fi
+    fi
+done < <(grep -E '^shared\s*=' "$conf" 2>/dev/null | sed 's/^[^=]*=\s*//' | tr -d '[]"' | tr ',' '\n' | xargs -I{} echo {})
+
 # Extra env vars from config
 while IFS= read -r var; do
     [[ -n "$var" ]] && podman_args+=(-e "$var")

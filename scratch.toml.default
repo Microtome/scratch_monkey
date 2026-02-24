@@ -18,3 +18,7 @@
 
 # Extra environment variables
 # env = []
+
+# Shared volumes (created via: just share-create <name>)
+# Mounted at /shared/<name> inside the container
+# shared = []

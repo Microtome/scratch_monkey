@@ -100,6 +100,34 @@ Additional volumes (e.g., Homebrew) can be added via the `volumes` config in `sc
 volumes = ["/home/linuxbrew/.linuxbrew:/home/linuxbrew/.linuxbrew:ro"]
 ```
 
+## Shared volumes
+
+Shared volumes enable communication between scratch-dev instances via a shared filesystem directory. Since containers already use `--network=host`, shared volumes complement that with a simple, reliable IPC channel for files, unix sockets, FIFOs, or databases.
+
+Shared volumes live at `$HOME/scratch-dev/.shared/<name>/` and are mounted at `/shared/<name>` inside the container.
+
+```bash
+# Create a shared volume
+just share-create comms
+
+# Add it to instances
+just share-add comms agent1
+just share-add comms agent2
+
+# Both instances now see /shared/comms/ (read-write, same host dir)
+just enter agent1
+just enter agent2
+
+# List shared volumes and which instances use them
+just share-list
+
+# Remove from an instance
+just share-remove comms agent1
+
+# Delete the shared volume
+just share-delete comms
+```
+
 ## Customizing the Dockerfile
 
 ### Scratch instances
@@ -165,6 +193,11 @@ Fedora instances use their own filesystem — no host system mounts.
 | `just run <name> [cmd]` | Run an instance |
 | `just enter <name>` | Interactive shell (`root=true` for root) |
 | `just shell <name>` | Alias for run |
+| `just share-create <name>` | Create a shared volume |
+| `just share-delete <name>` | Delete a shared volume |
+| `just share-add <name> <instance>` | Add shared volume to an instance |
+| `just share-remove <name> <instance>` | Remove shared volume from an instance |
+| `just share-list` | List shared volumes and usage |
 | `just clean` | Remove the base image |
 | `just clean-instance <name>` | Remove an instance's image |
 | `just status` | Show status |
