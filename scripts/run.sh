@@ -1,0 +1,132 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# Usage: run.sh <instances_dir> <base_image> <project_dir> <name> <root> <wayland> <ssh> <cmd> [args...]
+instances_dir="$1"
+base_image="$2"
+project_dir="$3"
+name="$4"
+opt_root="$5"
+opt_wayland="$6"
+opt_ssh="$7"
+opt_cmd="$8"
+shift 8
+
+dir="$instances_dir/$name"
+conf="$dir/scratch.toml"
+if [[ ! -d "$dir" ]]; then
+    echo "Error: instance '$name' not found at $dir"
+    exit 1
+fi
+
+# Read config with CLI overrides
+get() {
+    local key="$1" default="$2" override="$3"
+    if [[ -n "$override" ]]; then
+        echo "$override"
+        return
+    fi
+    local val
+    val=$(grep -E "^${key}\s*=" "$conf" 2>/dev/null | sed 's/^[^=]*=\s*//' | tr -d '"' | tr -d "'" | xargs)
+    echo "${val:-$default}"
+}
+
+cfg_cmd=$(get "cmd" "/bin/bash" "$opt_cmd")
+cfg_wayland=$(get "wayland" "false" "$opt_wayland")
+cfg_ssh=$(get "ssh" "false" "$opt_ssh")
+cfg_home=$(get "home" "" "")
+
+# Determine home directory
+if [[ -n "$cfg_home" ]]; then
+    home_dir="$cfg_home"
+else
+    home_dir="$dir/home"
+fi
+
+# Create home dir if missing
+if [[ ! -d "$home_dir" ]]; then
+    read -rp "'$home_dir' does not exist. Create it? [y/N] " answer
+    if [[ "$answer" =~ ^[Yy]$ ]]; then
+        mkdir -p "$home_dir"
+    else
+        exit 1
+    fi
+fi
+
+# Determine image: use instance image if built, otherwise base
+if podman image exists "$name" 2>/dev/null; then
+    run_image="$name"
+else
+    run_image="$base_image"
+    # Ensure base image exists
+    if ! podman image exists "$run_image"; then
+        echo "Base image '$run_image' not found, building..."
+        podman build -t "$run_image" "$project_dir"
+    fi
+fi
+
+# Base podman arguments
+podman_args=(
+    --rm -it
+    --security-opt label=disable
+    --network=host
+    -e "HOME=$home_dir"
+    -v /usr:/usr:ro
+    -v /etc:/etc:ro
+    -v /var/usrlocal:/var/usrlocal:ro
+    -v /var/opt:/var/opt:ro
+    -v /var/usrlocal:/usr/local:ro
+    -v "$home_dir":"$home_dir"
+)
+
+# Run as current user unless root mode requested
+if [[ "$opt_root" != "true" ]]; then
+    podman_args+=(--userns=keep-id)
+fi
+
+# Wayland socket sharing
+if [[ "$cfg_wayland" == "true" ]]; then
+    wayland_sock="/run/user/$(id -u)/wayland-0"
+    if [[ -S "$wayland_sock" ]]; then
+        podman_args+=(
+            -v "$wayland_sock":"$wayland_sock"
+            -e "WAYLAND_DISPLAY=wayland-0"
+            -e "XDG_RUNTIME_DIR=/run/user/$(id -u)"
+        )
+    else
+        echo "Warning: Wayland socket not found at $wayland_sock, skipping."
+    fi
+fi
+
+# SSH agent sharing
+if [[ "$cfg_ssh" == "true" ]]; then
+    if [[ -n "${SSH_AUTH_SOCK:-}" && -S "${SSH_AUTH_SOCK}" ]]; then
+        podman_args+=(
+            -v "${SSH_AUTH_SOCK}":"${SSH_AUTH_SOCK}"
+            -e "SSH_AUTH_SOCK=${SSH_AUTH_SOCK}"
+        )
+    else
+        echo "Warning: SSH_AUTH_SOCK not set or socket missing, skipping."
+    fi
+fi
+
+# .env file
+if [[ -f "$dir/.env" ]]; then
+    podman_args+=(--env-file "$dir/.env")
+fi
+
+# Extra volumes from config
+while IFS= read -r vol; do
+    [[ -n "$vol" ]] && podman_args+=(-v "$vol")
+done < <(grep -E '^volumes\s*=' "$conf" 2>/dev/null | sed 's/^[^=]*=\s*//' | tr -d '[]"' | tr ',' '\n' | xargs -I{} echo {})
+
+# Extra env vars from config
+while IFS= read -r var; do
+    [[ -n "$var" ]] && podman_args+=(-e "$var")
+done < <(grep -E '^env\s*=' "$conf" 2>/dev/null | sed 's/^[^=]*=\s*//' | tr -d '[]"' | tr ',' '\n' | xargs -I{} echo {})
+
+if [[ $# -gt 0 ]]; then
+    podman run "${podman_args[@]}" "$run_image" "$cfg_cmd" -c "$*"
+else
+    podman run "${podman_args[@]}" "$run_image" "$cfg_cmd"
+fi
