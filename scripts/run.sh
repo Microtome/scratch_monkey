@@ -35,6 +35,7 @@ cfg_cmd=$(get "cmd" "/bin/bash" "$opt_cmd")
 cfg_wayland=$(get "wayland" "false" "$opt_wayland")
 cfg_ssh=$(get "ssh" "false" "$opt_ssh")
 cfg_home=$(get "home" "" "")
+cfg_overlay=$(get "overlay" "false" "")
 
 # Determine home directory
 if [[ -n "$cfg_home" ]]; then
@@ -85,7 +86,7 @@ fi
 
 # Base podman arguments
 podman_args=(
-    --rm -it
+    -it
     --security-opt label=disable
     --network=host
     --hostname "$name.$(hostname -s)"
@@ -148,13 +149,13 @@ while IFS= read -r vol; do
 done < <(grep -E '^volumes\s*=' "$conf" 2>/dev/null | sed 's/^[^=]*=\s*//' | tr -d '[]"' | tr ',' '\n' | xargs -I{} echo {})
 
 # Shared volumes from config
-while IFS= read -r name; do
-    if [[ -n "$name" ]]; then
-        shared_path="$instances_dir/.shared/$name"
+while IFS= read -r shared_name; do
+    if [[ -n "$shared_name" ]]; then
+        shared_path="$instances_dir/.shared/$shared_name"
         if [[ -d "$shared_path" ]]; then
-            podman_args+=(-v "$shared_path:/shared/$name")
+            podman_args+=(-v "$shared_path:/shared/$shared_name")
         else
-            echo "Warning: shared volume '$name' not found at $shared_path, skipping."
+            echo "Warning: shared volume '$shared_name' not found at $shared_path, skipping."
         fi
     fi
 done < <(grep -E '^shared\s*=' "$conf" 2>/dev/null | sed 's/^[^=]*=\s*//' | tr -d '[]"' | tr ',' '\n' | xargs -I{} echo {})
@@ -164,8 +165,17 @@ while IFS= read -r var; do
     [[ -n "$var" ]] && podman_args+=(-e "$var")
 done < <(grep -E '^env\s*=' "$conf" 2>/dev/null | sed 's/^[^=]*=\s*//' | tr -d '[]"' | tr ',' '\n' | xargs -I{} echo {})
 
-if [[ $# -gt 0 ]]; then
-    podman run "${podman_args[@]}" "$run_image" "$cfg_cmd" -c "$*"
+container_name="${name}-overlay"
+
+if [[ "$cfg_overlay" == "true" ]] && [[ $# -eq 0 ]]; then
+    # Persistent container mode: resume if stopped, create if missing
+    if podman container exists "$container_name" 2>/dev/null; then
+        exec podman start -ai "$container_name"
+    else
+        podman run --name "$container_name" "${podman_args[@]}" "$run_image" "$cfg_cmd"
+    fi
+elif [[ $# -gt 0 ]]; then
+    podman run --rm "${podman_args[@]}" "$run_image" "$cfg_cmd" -c "$*"
 else
-    podman run "${podman_args[@]}" "$run_image" "$cfg_cmd"
+    podman run --rm "${podman_args[@]}" "$run_image" "$cfg_cmd"
 fi
