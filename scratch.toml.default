@@ -22,3 +22,8 @@
 # Shared volumes (created via: just share-create <name>)
 # Mounted at /shared/<name> inside the container
 # shared = []
+
+# Overlay mode: persist package installs across runs without rebuilding the image.
+# When enabled, a named container is kept between sessions so writes to the
+# filesystem (e.g. dnf/apt installs) survive. Use: just reset <name> to wipe it.
+# overlay = false
