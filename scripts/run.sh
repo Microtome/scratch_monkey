@@ -77,20 +77,21 @@ is_fedora=false
 instance_base=$(grep -E '^FROM\s+' "$dir/Dockerfile" 2>/dev/null | tail -1 | awk '{print $2}')
 [[ "$instance_base" == *fedora* ]] && is_fedora=true
 
-# Determine the home path inside the container
-if [[ "$opt_root" == "true" ]]; then
+# Home path inside the container.
+# For overlay mode the container is shared between root and non-root sessions,
+# so we always mount the user home at /home/$USER regardless of opt_root.
+# For non-overlay root runs we mount at /root instead.
+if [[ "$cfg_overlay" != "true" ]] && [[ "$opt_root" == "true" ]]; then
     container_home="/root"
 else
     container_home="/home/$USER"
 fi
 
-# Base podman arguments
+# Base podman arguments — no -it/-d, no --rm, no userns flags (added per path below)
 podman_args=(
-    -it
     --security-opt label=disable
     --network=host
     --hostname "$name.$(hostname -s)"
-    --workdir "$container_home"
     -e "HOME=$container_home"
     -e "USER=$USER"
     -e "SCRATCH_INSTANCE=$name"
@@ -106,11 +107,6 @@ if [[ "$is_fedora" == "false" ]]; then
         -v /var/opt:/var/opt:ro
         -v /var/usrlocal:/usr/local:ro
     )
-fi
-
-# Run as current user unless root mode requested
-if [[ "$opt_root" != "true" ]]; then
-    podman_args+=(--userns=keep-id)
 fi
 
 # Wayland socket sharing
@@ -166,17 +162,57 @@ while IFS= read -r var; do
     [[ -n "$var" ]] && podman_args+=(-e "$var")
 done < <(grep -E '^env\s*=' "$conf" 2>/dev/null | sed 's/^[^=]*=\s*//' | tr -d '[]"' | tr ',' '\n' | xargs -I{} echo {})
 
+# ─── Dispatch ────────────────────────────────────────────────────────────────
+
 container_name="${name}-overlay"
 
 if [[ "$cfg_overlay" == "true" ]] && [[ $# -eq 0 ]]; then
-    # Persistent container mode: resume if stopped, create if missing
-    if podman container exists "$container_name" 2>/dev/null; then
-        exec podman start -ai "$container_name"
-    else
-        podman run --name "$container_name" "${podman_args[@]}" "$run_image" "$cfg_cmd"
+    # Overlay mode: persistent daemon container, exec into it.
+    # Root and non-root share the same container so package installs are visible to both.
+
+    if ! podman container exists "$container_name" 2>/dev/null; then
+        echo "Creating overlay container '$container_name'..."
+        podman run -d --name "$container_name" "${podman_args[@]}" "$run_image" sleep infinity
+
+        # Ensure sudo is available
+        podman exec "$container_name" bash -c "rpm -q sudo &>/dev/null || dnf install -y sudo" 2>/dev/null || true
+
+        # Create the host user inside the container and grant passwordless sudo
+        podman exec "$container_name" useradd -u "$(id -u)" -M -s /bin/bash "$USER" 2>/dev/null || true
+        podman exec "$container_name" bash -c \
+            "echo '$USER ALL=(ALL) NOPASSWD: ALL' > /etc/sudoers.d/$USER && chmod 440 /etc/sudoers.d/$USER"
+
+        echo "Overlay container ready."
     fi
+
+    if ! podman inspect "$container_name" --format '{{.State.Running}}' 2>/dev/null | grep -q true; then
+        podman start "$container_name" >/dev/null
+    fi
+
+    if [[ "$opt_root" == "true" ]]; then
+        exec podman exec -it \
+            --workdir /root \
+            -e "HOME=/root" \
+            -e "USER=root" \
+            -e "SCRATCH_INSTANCE=$name" \
+            "$container_name" "$cfg_cmd"
+    else
+        exec podman exec -it \
+            --user "$USER" \
+            --workdir "$container_home" \
+            -e "HOME=$container_home" \
+            -e "USER=$USER" \
+            -e "SCRATCH_INSTANCE=$name" \
+            "$container_name" "$cfg_cmd"
+    fi
+
 elif [[ $# -gt 0 ]]; then
-    podman run --rm "${podman_args[@]}" "$run_image" "$cfg_cmd" -c "$*"
+    run_args=(--rm -it --workdir "$container_home")
+    [[ "$opt_root" != "true" ]] && run_args+=(--userns=keep-id)
+    podman run "${run_args[@]}" "${podman_args[@]}" "$run_image" "$cfg_cmd" -c "$*"
+
 else
-    podman run --rm "${podman_args[@]}" "$run_image" "$cfg_cmd"
+    run_args=(--rm -it --workdir "$container_home")
+    [[ "$opt_root" != "true" ]] && run_args+=(--userns=keep-id)
+    podman run "${run_args[@]}" "${podman_args[@]}" "$run_image" "$cfg_cmd"
 fi
