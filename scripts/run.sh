@@ -93,6 +93,7 @@ podman_args=(
     --workdir "$container_home"
     -e "HOME=$container_home"
     -e "USER=$USER"
+    -e "SCRATCH_INSTANCE=$name"
     -v "$home_dir":"$container_home"
 )
 

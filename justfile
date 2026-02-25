@@ -70,6 +70,25 @@ delete name:
 skel name:
     @{{scripts}}/skel.sh "{{instances_dir}}" "{{name}}"
 
+# Export a command from an instance to ~/.local/bin (bin defaults to basename of cmd)
+export name cmd bin="":
+    @{{scripts}}/export.sh "{{instances_dir}}" "{{base_image}}" "{{name}}" "{{cmd}}" "{{bin}}"
+
+# Remove an exported command from ~/.local/bin
+unexport bin:
+    #!/usr/bin/env bash
+    out="$HOME/.local/bin/{{bin}}"
+    if [[ ! -f "$out" ]]; then
+        echo "No file found at $out"
+        exit 1
+    fi
+    if ! grep -q '^# scratch-dev export' "$out" 2>/dev/null; then
+        echo "Warning: $out does not look like a scratch-dev export, not removing."
+        exit 1
+    fi
+    rm "$out"
+    echo "Removed $out"
+
 # Edit an instance file: config, dockerfile, or env
 edit name file="config":
     #!/usr/bin/env bash
@@ -140,6 +159,23 @@ shell name *args="":
 # Drop into an interactive shell (root=true for root shell)
 enter name:
     just root={{root}} run {{name}}
+
+# Reset overlay container for an instance (removes persistent layer, keeps home and image)
+reset name:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    container="{{name}}-overlay"
+    if ! podman container exists "$container" 2>/dev/null; then
+        echo "No overlay container found for '{{name}}'"
+        exit 0
+    fi
+    read -rp "Remove overlay container for '{{name}}'? Package installs will be lost. [y/N] " answer
+    if [[ ! "$answer" =~ ^[Yy]$ ]]; then
+        echo "Cancelled."
+        exit 0
+    fi
+    podman rm -f "$container"
+    echo "Overlay container for '{{name}}' removed."
 
 # ─── Shared volumes ───────────────────────────────────────────────────────────
 
