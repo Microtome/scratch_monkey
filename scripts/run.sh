@@ -88,6 +88,7 @@ podman_args=(
     --rm -it
     --security-opt label=disable
     --network=host
+    --hostname "$name.$(hostname -s)"
     --workdir "$container_home"
     -e "HOME=$container_home"
     -e "USER=$USER"
