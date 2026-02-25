@@ -76,13 +76,22 @@ is_fedora=false
 instance_base=$(grep -E '^FROM\s+' "$dir/Dockerfile" 2>/dev/null | tail -1 | awk '{print $2}')
 [[ "$instance_base" == *fedora* ]] && is_fedora=true
 
+# Determine the home path inside the container
+if [[ "$opt_root" == "true" ]]; then
+    container_home="/root"
+else
+    container_home="/home/$USER"
+fi
+
 # Base podman arguments
 podman_args=(
     --rm -it
     --security-opt label=disable
     --network=host
-    -e "HOME=$home_dir"
-    -v "$home_dir":"$home_dir"
+    --workdir "$container_home"
+    -e "HOME=$container_home"
+    -e "USER=$USER"
+    -v "$home_dir":"$container_home"
 )
 
 # Host system mounts (scratch only — fedora has its own)
