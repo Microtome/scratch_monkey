@@ -30,6 +30,7 @@ from ..shared import (
     create_shared,
     delete_shared,
     list_shared,
+    parse_shared_entry,
     remove_from_instance,
 )
 
@@ -444,10 +445,14 @@ def _run_instance(
 
     # Shared volumes
     instances_dir = inst.directory.parent
-    for shared_name in cfg.shared:
+    for shared_entry in cfg.shared:
+        shared_name, mode = parse_shared_entry(shared_entry)
         shared_path = instances_dir / ".shared" / shared_name
         if shared_path.is_dir():
-            podman_args += ["-v", f"{shared_path}:/shared/{shared_name}"]
+            mount_spec = f"{shared_path}:/shared/{shared_name}"
+            if mode == "ro":
+                mount_spec += ":ro"
+            podman_args += ["-v", mount_spec]
         else:
             click.echo(
                 f"Warning: shared volume {shared_name!r} not found, skipping.",

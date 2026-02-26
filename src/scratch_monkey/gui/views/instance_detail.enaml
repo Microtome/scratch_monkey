@@ -1,9 +1,10 @@
 """Instance detail panel for scratch-monkey GUI."""
 
 from enaml.widgets.api import (
-    Container, Label, PushButton, GroupBox, CheckBox, Field, VGroup, HGroup
+    Container, Label, PushButton, GroupBox, CheckBox, Field, VGroup, HGroup,
+    ObjectCombo
 )
-from enaml.core.api import Conditional
+from enaml.core.api import Conditional, Looper
 
 
 enamldef InstanceDetailPanel(Container): panel:
@@ -62,6 +63,79 @@ enamldef InstanceDetailPanel(Container): panel:
                             if app_model.selected:
                                 app_model.selected.save()
                                 app_model.status_message = f"Saved config for '{app_model.selected_instance}'"
+
+            GroupBox:
+                title = "Volume Mounts"
+
+                VGroup:
+                    Looper:
+                        iterable << (list(range(len(app_model.selected.volume_entries))) if app_model.selected else [])
+
+                        HGroup:
+                            Field:
+                                text << (app_model.selected.volume_entries[loop.item].host_path if app_model.selected and loop.item < len(app_model.selected.volume_entries) else "")
+                                text ::
+                                    if app_model.selected and loop.item < len(app_model.selected.volume_entries):
+                                        app_model.selected.volume_entries[loop.item].host_path = text
+                                placeholder = "Host path"
+
+                            Field:
+                                text << (app_model.selected.volume_entries[loop.item].container_path if app_model.selected and loop.item < len(app_model.selected.volume_entries) else "")
+                                text ::
+                                    if app_model.selected and loop.item < len(app_model.selected.volume_entries):
+                                        app_model.selected.volume_entries[loop.item].container_path = text
+                                placeholder = "Container path"
+
+                            ObjectCombo:
+                                items = ["rw", "ro"]
+                                selected << (app_model.selected.volume_entries[loop.item].mode if app_model.selected and loop.item < len(app_model.selected.volume_entries) else "rw")
+                                selected ::
+                                    if app_model.selected and loop.item < len(app_model.selected.volume_entries):
+                                        app_model.selected.volume_entries[loop.item].mode = selected
+
+                            PushButton:
+                                text = "X"
+                                clicked ::
+                                    if app_model.selected:
+                                        app_model.selected.remove_volume_entry(loop.item)
+
+                    PushButton:
+                        text = "+ Add Volume Mount"
+                        clicked ::
+                            if app_model.selected:
+                                app_model.selected.add_volume_entry()
+
+            GroupBox:
+                title = "Shared Volumes"
+
+                VGroup:
+                    Conditional:
+                        condition << (len(app_model.available_shared) == 0)
+
+                        Label:
+                            text = "No shared volumes found."
+
+                    Conditional:
+                        condition << (len(app_model.available_shared) > 0)
+
+                        Looper:
+                            iterable << (list(range(len(app_model.selected.shared_entries))) if app_model.selected else [])
+
+                            HGroup:
+                                CheckBox:
+                                    text << (app_model.selected.shared_entries[loop.item].name if app_model.selected and loop.item < len(app_model.selected.shared_entries) else "")
+                                    checked << (app_model.selected.shared_entries[loop.item].enabled if app_model.selected and loop.item < len(app_model.selected.shared_entries) else False)
+                                    toggled ::
+                                        if app_model.selected and loop.item < len(app_model.selected.shared_entries):
+                                            app_model.selected.shared_entries[loop.item].enabled = checked
+
+                                ObjectCombo:
+                                    items = ["rw", "ro"]
+                                    selected << (app_model.selected.shared_entries[loop.item].mode if app_model.selected and loop.item < len(app_model.selected.shared_entries) else "rw")
+                                    selected ::
+                                        if app_model.selected and loop.item < len(app_model.selected.shared_entries):
+                                            app_model.selected.shared_entries[loop.item].mode = selected
+                                    enabled << (app_model.selected.shared_entries[loop.item].enabled if app_model.selected and loop.item < len(app_model.selected.shared_entries) else False)
 
             GroupBox:
                 title = "Actions"
