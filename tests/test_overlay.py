@@ -202,3 +202,48 @@ class TestReset:
         result = reset(scratch_instance, mock_runner)
         assert result is False
         mock_runner.remove.assert_not_called()
+
+
+# ─── _build_run_args shared volumes ────────────────────────────────────────────
+
+
+class TestBuildRunArgsSharedVolumes:
+    """Tests for shared volume expansion in _build_run_args."""
+
+    def test_shared_volume_rw_mount(self, scratch_instance, mock_runner, tmp_path):
+        """Shared volume with default rw mode mounts without :ro suffix."""
+        instances_dir = scratch_instance.directory.parent
+        shared_dir = instances_dir / ".shared" / "comms"
+        shared_dir.mkdir(parents=True)
+        scratch_instance.config.shared = ["comms"]
+
+        mock_runner.container_exists.return_value = False
+        ensure_running(scratch_instance, mock_runner, "scratch_dev")
+        call_args = mock_runner.run_daemon.call_args
+        run_args = call_args[0][2]
+        mount = f"{shared_dir}:/shared/comms"
+        assert mount in run_args
+
+    def test_shared_volume_ro_mount(self, scratch_instance, mock_runner, tmp_path):
+        """Shared volume with :ro suffix mounts with :ro."""
+        instances_dir = scratch_instance.directory.parent
+        shared_dir = instances_dir / ".shared" / "comms"
+        shared_dir.mkdir(parents=True)
+        scratch_instance.config.shared = ["comms:ro"]
+
+        mock_runner.container_exists.return_value = False
+        ensure_running(scratch_instance, mock_runner, "scratch_dev")
+        call_args = mock_runner.run_daemon.call_args
+        run_args = call_args[0][2]
+        mount = f"{shared_dir}:/shared/comms:ro"
+        assert mount in run_args
+
+    def test_missing_shared_volume_skipped(self, scratch_instance, mock_runner):
+        """Missing shared volume directory is silently skipped."""
+        scratch_instance.config.shared = ["nonexistent"]
+
+        mock_runner.container_exists.return_value = False
+        ensure_running(scratch_instance, mock_runner, "scratch_dev")
+        call_args = mock_runner.run_daemon.call_args
+        run_args = call_args[0][2]
+        assert not any("nonexistent" in arg for arg in run_args)
