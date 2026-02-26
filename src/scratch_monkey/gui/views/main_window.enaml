@@ -1,5 +1,10 @@
 """Main application window for scratch-monkey GUI."""
 
+import enaml
+with enaml.imports():
+    from enaml.stdlib.message_box import question
+from enaml.stdlib.dialog_buttons import DialogButton
+
 from enaml.widgets.api import (
     MainWindow, Container, Label, ToolBar, Action, Splitter, SplitItem
 )
@@ -16,6 +21,17 @@ enamldef ScratchMonkeyWindow(MainWindow): win:
     title = "scratch-monkey"
     initial_size = (1200, 900)
     minimum_size = (900, 600)
+
+    closing ::
+        if app_model.has_unsaved_changes():
+            result = question(
+                win,
+                "Unsaved Changes",
+                "Some instances have unsaved config changes. Close anyway?",
+                [DialogButton('Close', 'accept'), DialogButton('Cancel', 'reject')],
+            )
+            if result is None or result.action != 'accept':
+                change['value'].ignore()
 
     ToolBar:
         Action:
