@@ -27,7 +27,8 @@ Every coding agent assigned a feature follows this loop until all assigned featu
 4. Run tests     →  uv run pytest -q
 5. Fix any failures and return to step 1
 6. Update README →  If the change adds/changes user-facing behavior, update README.md
-7. When all assigned features pass lint + tests → report completion
+7. Commit        →  Stage and commit all changes (see Commit Rules below)
+8. Report        →  Print a structured completion report (see Completion Report below)
 ```
 
 An agent is **not done** until:
@@ -35,6 +36,43 @@ An agent is **not done** until:
 - All new and existing tests pass
 - Lint reports zero errors
 - README.md is updated if user-facing behavior changed
+- All changes are committed to the worktree branch
+- A completion report is printed
+
+### Commit Rules
+
+Agents **must** commit their work before finishing. Uncommitted changes in a worktree are lost when the worktree is cleaned up.
+
+```bash
+git add -A
+git commit -m "<type>: <description>"
+```
+
+Use the commit conventions from this file. Do NOT amend existing commits — always create new ones.
+
+### Completion Report
+
+When done, the agent must print a structured summary so the PM can verify without re-reading every file:
+
+```
+## Completion Report
+
+### Branch
+<worktree branch name from `git branch --show-current`>
+
+### Changes
+- <file>: <what changed and why>
+- ...
+
+### Test Results
+<paste last line of pytest output, e.g. "163 passed in 0.40s">
+
+### Lint
+<"All checks passed!" or list of remaining issues>
+
+### Notes
+<anything the PM should know — edge cases, decisions made, things intentionally left unchanged>
+```
 
 ---
 
@@ -71,23 +109,29 @@ isolation: worktree
 prompt: <detailed feature spec + dev lifecycle instructions>
 ```
 
-Each agent prompt must include:
+Each agent prompt **must** include:
 - The specific features to implement
 - Relevant existing files to read first
-- The dev lifecycle steps to follow
-- How to report completion (summary of changes + test results)
+- The dev lifecycle steps to follow (reference this file's "Development Lifecycle" section)
+- **Branch context**: Tell the agent which branch it is working on. The `isolation: "worktree"` mechanism creates a new branch off the PM's current HEAD and checks it out in the worktree. The agent should verify with `git branch --show-current` and include the branch name in its completion report.
+- **Base branch**: Tell the agent the name of the PM's topic branch (e.g. `feat/<topic>`) so it knows what its work will be merged into. This is for context only — the agent does not merge.
+- **Commit requirement**: Remind the agent it must `git add -A && git commit` before finishing. Uncommitted worktree changes are silently discarded.
 
 ### Phase 4 — Analyze & Merge
 
 When an agent completes:
 
-1. Read the agent's diff (`git diff main...<branch>`)
-2. Verify: Do the changes match the assigned feature spec?
-3. Verify: Are tests present and meaningful (not just passing trivially)?
-4. Verify: No regressions in unrelated modules
-5. If issues found: resume the agent with specific feedback
-6. If satisfactory: merge into the topic branch:
+1. Read the agent's completion report (returned in the Task result)
+2. Find the worktree branch: check `git branch --sort=-committerdate` for the branch name the agent reported, or look for recent `worktree-agent-*` branches
+3. Verify the diff: `git diff <topic-branch>...<worktree-branch>`
+4. Verify: Do the changes match the assigned feature spec?
+5. Verify: Are tests present and meaningful (not just passing trivially)?
+6. Verify: No regressions in unrelated modules
+7. If the worktree branch is missing or has no commits, the agent failed to commit — resume it with instructions to commit
+8. If issues found: resume the agent with specific feedback
+9. If satisfactory: merge into the topic branch:
    ```bash
+   git checkout feat/<topic>
    git merge --no-ff <worktree-branch> -m "feat: <description>"
    ```
 
@@ -118,7 +162,13 @@ feat/<topic>      — topic branch owned by PM for a feature set
 fix/<topic>       — bug fix topic branch
 ```
 
-Worktree branches created by agents are ephemeral and managed by the `isolation: "worktree"` mechanism.
+Worktree branches are created automatically by `isolation: "worktree"` with names like `worktree-agent-<id>`. They branch off the PM's current HEAD at spawn time. After the PM merges, the worktree branch can be deleted:
+
+```bash
+git branch -d worktree-agent-<id>
+```
+
+**Critical**: If an agent does not commit, the worktree is cleaned up with no changes preserved. The PM must always instruct agents to commit.
 
 ## Commit Conventions
 
