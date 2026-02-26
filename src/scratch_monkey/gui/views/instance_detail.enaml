@@ -1,9 +1,8 @@
 """Instance detail panel for scratch-monkey GUI."""
 
 from enaml.widgets.api import (
-    Container, Label, PushButton, GroupBox, Form, CheckBox, Field, VGroup, HGroup
+    Container, Label, PushButton, GroupBox, CheckBox, Field, VGroup, HGroup
 )
-from enaml.layout.api import vbox, hbox, spacer
 from enaml.core.api import Conditional
 
 
@@ -30,27 +29,27 @@ enamldef InstanceDetailPanel(Container): panel:
                     HGroup:
                         Label:
                             text = "Command:"
-                        Field: cmd_field:
+                        Field:
                             text << (app_model.selected.cmd if app_model.selected else "")
                             text ::
                                 if app_model.selected:
                                     app_model.selected.cmd = text
 
-                    CheckBox: wayland_cb:
+                    CheckBox:
                         text = "Wayland"
                         checked << (app_model.selected.wayland if app_model.selected else False)
                         toggled ::
                             if app_model.selected:
                                 app_model.selected.wayland = checked
 
-                    CheckBox: ssh_cb:
+                    CheckBox:
                         text = "SSH Agent"
                         checked << (app_model.selected.ssh if app_model.selected else False)
                         toggled ::
                             if app_model.selected:
                                 app_model.selected.ssh = checked
 
-                    CheckBox: overlay_cb:
+                    CheckBox:
                         text = "Overlay mode"
                         checked << (app_model.selected.overlay if app_model.selected else False)
                         toggled ::
@@ -62,6 +61,7 @@ enamldef InstanceDetailPanel(Container): panel:
                         clicked ::
                             if app_model.selected:
                                 app_model.selected.save()
+                                app_model.status_message = f"Saved config for '{app_model.selected_instance}'"
 
             GroupBox:
                 title = "Actions"
@@ -70,24 +70,24 @@ enamldef InstanceDetailPanel(Container): panel:
                     PushButton:
                         text = "Enter"
                         clicked ::
-                            pass
+                            app_model.enter_instance(app_model.selected_instance)
 
                     PushButton:
                         text = "Enter as Root"
                         clicked ::
-                            pass
+                            app_model.enter_instance(app_model.selected_instance, root=True)
 
                     PushButton:
                         text = "Build"
                         clicked ::
-                            pass
+                            app_model.build_instance(app_model.selected_instance)
 
                     PushButton:
                         text = "Reset Overlay"
                         clicked ::
-                            pass
+                            app_model.reset_overlay(app_model.selected_instance)
 
                     PushButton:
                         text = "Delete"
                         clicked ::
-                            pass
+                            app_model.delete_instance(app_model.selected_instance)

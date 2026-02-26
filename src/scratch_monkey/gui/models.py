@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import shutil
+import subprocess
 from pathlib import Path
 
 try:
@@ -9,12 +11,43 @@ try:
 except ImportError:
     raise ImportError(
         "The GUI requires the 'enaml' package. "
-        "Install it with: pip install 'scratch-monkey[gui]'"
+        "Install it with: uv tool install 'scratch-monkey[gui]'"
     )
 
 from ..config import InstanceConfig, save
 from ..container import PodmanRunner
 from ..instance import InstanceInfo, list_all
+
+
+def _find_terminal() -> list[str]:
+    """Return a command prefix to launch a terminal emulator.
+
+    Tries xdg-terminal-exec first (standard portable method), then
+    common terminals. Returns an empty list if none are found.
+    """
+    candidates = [
+        (["xdg-terminal-exec"], []),
+        (["gnome-terminal"], ["--"]),
+        (["konsole"], ["-e"]),
+        (["xfce4-terminal"], ["-e"]),
+        (["alacritty"], ["-e"]),
+        (["kitty"], []),
+        (["foot"], []),
+        (["xterm"], ["-e"]),
+    ]
+    for base, sep in candidates:
+        if shutil.which(base[0]):
+            return base + sep
+    return []
+
+
+def _launch_in_terminal(cmd: list[str]) -> str:
+    """Launch cmd in a terminal emulator. Returns an error string or ''."""
+    prefix = _find_terminal()
+    if not prefix:
+        return "No terminal emulator found. Install xdg-terminal-exec, gnome-terminal, or similar."
+    subprocess.Popen([*prefix, *cmd])
+    return ""
 
 
 class InstanceModel(Atom):
@@ -76,9 +109,9 @@ class AppModel(Atom):
 
     instances_dir = Str()
     instances = List(InstanceModel)
-    selected_instance = Str("")  # name of selected instance
+    selected_instance = Str("")
     status_message = Str("")
-    # PodmanRunner stored as a Value member so Atom allows it
+    # PodmanRunner stored as Value so Atom allows non-member attributes
     _runner = Value()
 
     def __init__(self, instances_dir: Path, runner: PodmanRunner | None = None) -> None:
@@ -86,6 +119,15 @@ class AppModel(Atom):
         self.instances_dir = str(instances_dir)
         self._runner = runner or PodmanRunner()
         self.refresh()
+
+    # ── queries ──────────────────────────────────────────────────────────────
+
+    @property
+    def selected(self) -> InstanceModel | None:
+        for inst in self.instances:
+            if inst.name == self.selected_instance:
+                return inst
+        return None
 
     def refresh(self) -> None:
         """Reload all instances from disk."""
@@ -97,9 +139,53 @@ class AppModel(Atom):
         except Exception as e:
             self.status_message = f"Error loading instances: {e}"
 
-    @property
-    def selected(self) -> InstanceModel | None:
-        for inst in self.instances:
-            if inst.name == self.selected_instance:
-                return inst
-        return None
+    # ── actions ──────────────────────────────────────────────────────────────
+
+    def enter_instance(self, name: str, *, root: bool = False) -> None:
+        """Open a terminal running scratch-monkey enter for the named instance."""
+        cmd = ["scratch-monkey", "enter", name]
+        if root:
+            cmd.append("--root")
+        err = _launch_in_terminal(cmd)
+        if err:
+            self.status_message = err
+        else:
+            self.status_message = f"Opened terminal for {name!r}" + (" (root)" if root else "")
+
+    def build_instance(self, name: str) -> None:
+        """Open a terminal running scratch-monkey build-instance."""
+        err = _launch_in_terminal(["scratch-monkey", "build-instance", name])
+        if err:
+            self.status_message = err
+        else:
+            self.status_message = f"Building {name!r} in terminal..."
+
+    def reset_overlay(self, name: str) -> None:
+        """Remove the overlay container for the named instance."""
+        try:
+            result = subprocess.run(
+                ["scratch-monkey", "reset", name, "--yes"],
+                capture_output=True,
+                text=True,
+            )
+            msg = result.stdout.strip() or result.stderr.strip()
+            self.status_message = msg or f"Reset overlay for {name!r}"
+        except Exception as e:
+            self.status_message = f"Error: {e}"
+        self.refresh()
+
+    def delete_instance(self, name: str) -> None:
+        """Delete the named instance (no confirmation — caller must confirm)."""
+        try:
+            result = subprocess.run(
+                ["scratch-monkey", "delete", name, "--yes"],
+                capture_output=True,
+                text=True,
+            )
+            msg = result.stdout.strip() or result.stderr.strip()
+            self.status_message = msg or f"Deleted {name!r}"
+            if result.returncode == 0:
+                self.selected_instance = ""
+        except Exception as e:
+            self.status_message = f"Error: {e}"
+        self.refresh()
