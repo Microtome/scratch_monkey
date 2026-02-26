@@ -17,6 +17,7 @@ except ImportError:
 from ..config import InstanceConfig, save
 from ..container import PodmanRunner
 from ..instance import InstanceInfo, list_all
+from ..shared import list_shared
 
 
 def _find_terminal() -> list[str]:
@@ -50,6 +51,39 @@ def _launch_in_terminal(cmd: list[str]) -> str:
     return ""
 
 
+class VolumeMountEntry(Atom):
+    """Structured representation of a volume mount string like '/host:/container:ro'."""
+
+    host_path = Str()
+    container_path = Str()
+    mode = Str("rw")
+
+    @classmethod
+    def from_spec(cls, spec: str) -> VolumeMountEntry:
+        """Parse a volume spec string like '/host:/container' or '/host:/container:ro'."""
+        parts = spec.split(":")
+        if len(parts) == 3:
+            return cls(host_path=parts[0], container_path=parts[1], mode=parts[2])
+        elif len(parts) == 2:
+            return cls(host_path=parts[0], container_path=parts[1], mode="rw")
+        else:
+            return cls(host_path=spec, container_path=spec, mode="rw")
+
+    def to_spec(self) -> str:
+        """Serialize back to a volume spec string."""
+        if self.mode == "rw":
+            return f"{self.host_path}:{self.container_path}"
+        return f"{self.host_path}:{self.container_path}:{self.mode}"
+
+
+class SharedVolumeEntry(Atom):
+    """A shared volume with enabled/disabled state and mode."""
+
+    name = Str()
+    enabled = Bool(False)
+    mode = Str("rw")
+
+
 class InstanceModel(Atom):
     """Observable model for a single scratch-monkey instance."""
 
@@ -67,6 +101,8 @@ class InstanceModel(Atom):
     shared = List(str)
     volumes = List(str)
     env_vars = List(str)
+    volume_entries = List(VolumeMountEntry)
+    shared_entries = List(SharedVolumeEntry)
 
     @classmethod
     def from_info(cls, info: InstanceInfo) -> InstanceModel:
@@ -84,6 +120,7 @@ class InstanceModel(Atom):
         m.shared = list(cfg.shared)
         m.volumes = list(cfg.volumes)
         m.env_vars = list(cfg.env)
+        m.volume_entries = [VolumeMountEntry.from_spec(v) for v in cfg.volumes]
         return m
 
     def to_config(self) -> InstanceConfig:
@@ -92,11 +129,26 @@ class InstanceModel(Atom):
             wayland=self.wayland,
             ssh=self.ssh,
             home=self.home,
-            volumes=list(self.volumes),
+            volumes=[e.to_spec() for e in self.volume_entries],
             env=list(self.env_vars),
-            shared=list(self.shared),
+            shared=[
+                f"{e.name}:{e.mode}" if e.mode != "rw" else e.name
+                for e in self.shared_entries
+                if e.enabled
+            ],
             overlay=self.overlay,
         )
+
+    def add_volume_entry(self) -> None:
+        """Append a new blank volume mount entry."""
+        self.volume_entries = [*self.volume_entries, VolumeMountEntry()]
+
+    def remove_volume_entry(self, index: int) -> None:
+        """Remove volume entry at the given index."""
+        entries = list(self.volume_entries)
+        if 0 <= index < len(entries):
+            del entries[index]
+            self.volume_entries = entries
 
     def save(self) -> None:
         """Persist the current model state to scratch.toml."""
@@ -114,6 +166,7 @@ class AppModel(Atom):
     # Using Value() (not @property) so Enaml bindings re-fire when it changes.
     selected = Value()
     status_message = Str("")
+    available_shared = List(str)
     # PodmanRunner stored as Value so Atom allows non-member attributes
     _runner = Value()
 
@@ -129,12 +182,37 @@ class AppModel(Atom):
         """Keep self.selected in sync when selected_instance changes."""
         name = change["value"]
         self.selected = next((i for i in self.instances if i.name == name), None)
+        if self.selected:
+            self.init_shared_entries(self.selected)
 
     def _observe_instances(self, change: dict) -> None:
         """Re-resolve selected after the instance list is refreshed."""
         self.selected = next((i for i in self.instances if i.name == self.selected_instance), None)
+        if self.selected:
+            self.init_shared_entries(self.selected)
 
     # ── actions ───────────────────────────────────────────────────────────────
+
+    def init_shared_entries(self, model: InstanceModel) -> None:
+        """Build SharedVolumeEntry list from available shared + instance config."""
+        # Parse current config shared entries into a dict of name -> mode
+        config_shared: dict[str, str] = {}
+        for entry in model.shared:
+            if ":" in entry:
+                name, mode = entry.rsplit(":", 1)
+                if mode in ("ro", "rw"):
+                    config_shared[name] = mode
+                else:
+                    config_shared[entry] = "rw"
+            else:
+                config_shared[entry] = "rw"
+
+        entries = []
+        for name in self.available_shared:
+            enabled = name in config_shared
+            mode = config_shared.get(name, "rw")
+            entries.append(SharedVolumeEntry(name=name, enabled=enabled, mode=mode))
+        model.shared_entries = entries
 
     def refresh(self) -> None:
         """Reload all instances from disk."""
@@ -142,6 +220,7 @@ class AppModel(Atom):
         try:
             infos = list_all(instances_dir, self._runner)
             self.instances = [InstanceModel.from_info(i) for i in infos]
+            self.available_shared = [v.name for v in list_shared(instances_dir)]
             self.status_message = f"Loaded {len(self.instances)} instance(s)"
         except Exception as e:
             self.status_message = f"Error loading instances: {e}"
