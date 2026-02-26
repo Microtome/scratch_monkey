@@ -29,6 +29,7 @@ enamldef InstanceDetailPanel(Container): panel:
                     ConfigEditorPanel:
                         model << app_model.selected
                         available_shared << app_model.available_shared
+                        app_model = panel.app_model
 
                     PushButton:
                         text = "Save Config"

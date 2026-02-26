@@ -30,6 +30,7 @@ enamldef CreateInstanceDialog(Dialog): dlg:
             ConfigEditorPanel:
                 model = dlg.instance_model
                 available_shared << dlg.app_model.available_shared if dlg.app_model else []
+                app_model = dlg.app_model
 
             Label: error_label:
                 text << dlg._error_msg
