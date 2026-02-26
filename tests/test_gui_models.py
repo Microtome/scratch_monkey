@@ -197,7 +197,92 @@ class TestGUISmoke:
         import enaml
         with enaml.imports():
             from scratch_monkey.gui.views import (
+                create_dialog,  # noqa: F401
                 instance_detail,  # noqa: F401
                 instance_list,  # noqa: F401
                 main_window,  # noqa: F401
             )
+
+
+class TestAppModelCreateInstance:
+    """Tests for AppModel.create_instance()."""
+
+    def _make_app(self, tmp_path):
+        from unittest.mock import MagicMock, patch
+
+        instances_dir = tmp_path / "scratch-monkey"
+        instances_dir.mkdir()
+
+        runner = MagicMock()
+        runner.container_exists.return_value = False
+        runner.container_running.return_value = False
+        runner.image_exists.return_value = False
+
+        # Patch _PROJECT_DIR to use a temp dir with scratch.toml.default
+        project_dir = tmp_path / "project"
+        project_dir.mkdir()
+
+        with patch("scratch_monkey.gui.models._PROJECT_DIR", project_dir):
+            app = AppModel(instances_dir=instances_dir, runner=runner)
+
+        return app, instances_dir, project_dir
+
+    def test_create_success(self, tmp_path):
+        from unittest.mock import patch
+
+        app, instances_dir, project_dir = self._make_app(tmp_path)
+        assert len(app.instances) == 0
+
+        with patch("scratch_monkey.gui.models._PROJECT_DIR", project_dir):
+            result = app.create_instance("myinst")
+
+        assert result == ""
+        assert (instances_dir / "myinst").is_dir()
+        assert (instances_dir / "myinst" / "scratch.toml").exists()
+        assert app.selected_instance == "myinst"
+        assert any(i.name == "myinst" for i in app.instances)
+
+    def test_create_invalid_name(self, tmp_path):
+        from unittest.mock import patch
+
+        app, instances_dir, project_dir = self._make_app(tmp_path)
+
+        with patch("scratch_monkey.gui.models._PROJECT_DIR", project_dir):
+            result = app.create_instance("bad name!")
+
+        assert result != ""
+        assert len(app.instances) == 0
+
+    def test_create_duplicate(self, tmp_path):
+        from unittest.mock import patch
+
+        app, instances_dir, project_dir = self._make_app(tmp_path)
+
+        with patch("scratch_monkey.gui.models._PROJECT_DIR", project_dir):
+            app.create_instance("dup")
+            result = app.create_instance("dup")
+
+        assert result != ""
+
+    def test_create_fedora(self, tmp_path):
+        from unittest.mock import patch
+
+        app, instances_dir, project_dir = self._make_app(tmp_path)
+
+        with patch("scratch_monkey.gui.models._PROJECT_DIR", project_dir):
+            result = app.create_instance("fed", fedora=True)
+
+        assert result == ""
+        dockerfile = (instances_dir / "fed" / "Dockerfile").read_text()
+        assert "fedora" in dockerfile.lower()
+
+    def test_create_selects_new_instance(self, tmp_path):
+        from unittest.mock import patch
+
+        app, instances_dir, project_dir = self._make_app(tmp_path)
+
+        with patch("scratch_monkey.gui.models._PROJECT_DIR", project_dir):
+            app.create_instance("first")
+            app.create_instance("second")
+
+        assert app.selected_instance == "second"

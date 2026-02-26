@@ -14,10 +14,14 @@ except ImportError:
         "Install it with: uv tool install 'scratch-monkey[gui]'"
     )
 
-from ..config import InstanceConfig, save
+from ..config import ConfigError, InstanceConfig, save
 from ..container import PodmanRunner
-from ..instance import InstanceInfo, list_all
+from ..instance import InstanceError, InstanceInfo, create, list_all, skel_copy
 from ..shared import list_shared, parse_shared_entry
+
+_PROJECT_DIR = Path(__file__).parent.parent.parent.parent
+_DEFAULT_BASE_IMAGE = "scratch_dev"
+_FEDORA_IMAGE = "scratch_dev_fedora"
 
 
 def _find_terminal() -> list[str]:
@@ -271,3 +275,17 @@ class AppModel(Atom):
         except Exception as e:
             self.status_message = f"Error: {e}"
         self.refresh()
+
+    def create_instance(self, name: str, *, fedora: bool = False, skel: bool = False) -> str:
+        """Create a new instance. Returns '' on success or error string on failure."""
+        base_image = _FEDORA_IMAGE if fedora else _DEFAULT_BASE_IMAGE
+        try:
+            inst = create(name, Path(self.instances_dir), base_image, _PROJECT_DIR)
+        except (InstanceError, ConfigError) as e:
+            return str(e)
+        if skel:
+            skel_copy(inst)
+        self.refresh()
+        self.selected_instance = name
+        self.status_message = f"Created instance {name!r}"
+        return ""

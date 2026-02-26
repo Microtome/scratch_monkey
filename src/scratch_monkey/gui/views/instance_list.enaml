@@ -4,11 +4,15 @@ from enaml.widgets.api import Container, PushButton, ScrollArea, VGroup
 from enaml.layout.api import vbox
 from enaml.core.api import Looper
 
+from scratch_monkey.gui.views.create_dialog import CreateInstanceDialog
+
 
 enamldef InstanceListPanel(Container): panel:
     attr app_model
 
-    ScrollArea:
+    constraints = [vbox(scroll, new_btn)]
+
+    ScrollArea: scroll:
         Container:
             Looper:
                 iterable << app_model.instances
@@ -21,3 +25,9 @@ enamldef InstanceListPanel(Container): panel:
                     ) + inst.name
                     clicked ::
                         app_model.selected_instance = inst.name
+
+    PushButton: new_btn:
+        text = "+ New Instance"
+        clicked ::
+            dlg = CreateInstanceDialog(panel, app_model=app_model)
+            dlg.exec_()
