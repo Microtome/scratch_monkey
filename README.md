@@ -193,7 +193,9 @@ A graphical interface is available when installed with GUI dependencies:
 
 ```bash
 uv tool install --editable ".[gui]"
-scratch-monkey-gui
+scratch-monkey-gui                                # standalone launcher
+scratch-monkey gui                                # or via the CLI (respects --instances-dir)
+scratch-monkey --instances-dir /path/to/dir gui  # use a custom instances directory
 ```
 
 The GUI provides:
@@ -276,6 +278,7 @@ Fedora instances use their own filesystem — no host system mounts.
 | `share add <vol> <instance>` | Add volume to instance config |
 | `share remove <vol> <instance>` | Remove volume from instance config |
 | `share list` | List all shared volumes and usage |
+| `gui` | Launch the GUI (requires `[gui]` extras) |
 
 Global options (before the command):
 

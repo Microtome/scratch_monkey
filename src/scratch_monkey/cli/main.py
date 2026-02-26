@@ -503,6 +503,25 @@ def unexport_cmd(bin: str) -> None:
     click.echo(f"Removed ~/.local/bin/{bin}")
 
 
+# ─── GUI ──────────────────────────────────────────────────────────────────────
+
+
+@cli.command()
+@click.pass_context
+def gui(ctx: click.Context) -> None:
+    """Launch the scratch-monkey GUI."""
+    try:
+        from ..gui.main import main as gui_main
+    except ImportError:
+        click.echo(
+            "Error: GUI dependencies not installed.\n"
+            "Install with: uv tool install --editable '.[gui]'",
+            err=True,
+        )
+        sys.exit(1)
+    gui_main(instances_dir=ctx.obj["instances_dir"])
+
+
 # ─── Shared volumes ───────────────────────────────────────────────────────────
 
 
