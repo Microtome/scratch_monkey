@@ -20,12 +20,15 @@ enamldef CreateInstanceDialog(Dialog): dlg:
             Field: name_field:
                 placeholder = "my-instance"
                 submit_triggers = ['lost_focus', 'return_pressed', 'auto_sync']
+                tool_tip = "Unique name (letters, numbers, and hyphens)"
 
             CheckBox: fedora_cb:
                 text = "Fedora base image"
+                tool_tip = "Use a Fedora base image instead of scratch"
 
             CheckBox: skel_cb:
                 text = "Copy /etc/skel"
+                tool_tip = "Copy skeleton files into the home directory"
 
             ConfigEditorPanel:
                 model = dlg.instance_model
