@@ -26,13 +26,15 @@ Every coding agent assigned a feature follows this loop until all assigned featu
 3. Lint          →  uv run ruff check src tests
 4. Run tests     →  uv run pytest -q
 5. Fix any failures and return to step 1
-6. When all assigned features pass lint + tests → report completion
+6. Update README →  If the change adds/changes user-facing behavior, update README.md
+7. When all assigned features pass lint + tests → report completion
 ```
 
 An agent is **not done** until:
 - All assigned features are implemented
 - All new and existing tests pass
 - Lint reports zero errors
+- README.md is updated if user-facing behavior changed
 
 ---
 
