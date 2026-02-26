@@ -197,6 +197,7 @@ class TestGUISmoke:
         import enaml
         with enaml.imports():
             from scratch_monkey.gui.views import (
+                config_editor,  # noqa: F401
                 create_dialog,  # noqa: F401
                 instance_detail,  # noqa: F401
                 instance_list,  # noqa: F401
@@ -286,3 +287,83 @@ class TestAppModelCreateInstance:
             app.create_instance("second")
 
         assert app.selected_instance == "second"
+
+    def test_create_with_config_override(self, tmp_path):
+        from unittest.mock import patch
+
+        from scratch_monkey.config import InstanceConfig, load
+
+        app, instances_dir, project_dir = self._make_app(tmp_path)
+
+        custom_cfg = InstanceConfig(cmd="/bin/zsh", wayland=True, env=["EDITOR=vim"])
+
+        with patch("scratch_monkey.gui.models._PROJECT_DIR", project_dir):
+            result = app.create_instance("configured", config=custom_cfg)
+
+        assert result == ""
+        saved = load(instances_dir / "configured" / "scratch.toml")
+        assert saved.cmd == "/bin/zsh"
+        assert saved.wayland is True
+        assert "EDITOR=vim" in saved.env
+
+    def test_create_without_config_uses_default(self, tmp_path):
+        from unittest.mock import patch
+
+        from scratch_monkey.config import load
+
+        app, instances_dir, project_dir = self._make_app(tmp_path)
+
+        with patch("scratch_monkey.gui.models._PROJECT_DIR", project_dir):
+            result = app.create_instance("default-cfg")
+
+        assert result == ""
+        saved = load(instances_dir / "default-cfg" / "scratch.toml")
+        assert saved.cmd == "/bin/bash"  # default
+
+    def test_new_instance_model(self, tmp_path):
+        from unittest.mock import patch
+
+        app, instances_dir, project_dir = self._make_app(tmp_path)
+
+        # Add a shared volume
+        shared_dir = instances_dir / ".shared"
+        shared_dir.mkdir()
+        (shared_dir / "comms").mkdir()
+
+        with patch("scratch_monkey.gui.models._PROJECT_DIR", project_dir):
+            app.refresh()
+            m = app.new_instance_model()
+
+        assert isinstance(m, InstanceModel)
+        assert len(m.shared_entries) == 1
+        assert m.shared_entries[0].name == "comms"
+
+
+class TestInstanceModelEnvVars:
+    def test_add_env_var_default(self):
+        m = InstanceModel()
+        m.add_env_var()
+        assert m.env_vars == [""]
+
+    def test_add_env_var_with_value(self):
+        m = InstanceModel()
+        m.add_env_var("FOO=bar")
+        assert m.env_vars == ["FOO=bar"]
+
+    def test_remove_env_var(self):
+        m = InstanceModel()
+        m.env_vars = ["A=1", "B=2", "C=3"]
+        m.remove_env_var(1)
+        assert m.env_vars == ["A=1", "C=3"]
+
+    def test_remove_env_var_out_of_range(self):
+        m = InstanceModel()
+        m.env_vars = ["A=1"]
+        m.remove_env_var(5)
+        assert m.env_vars == ["A=1"]
+
+    def test_to_config_includes_env(self):
+        m = InstanceModel()
+        m.env_vars = ["FOO=bar", "BAZ=qux"]
+        cfg = m.to_config()
+        assert cfg.env == ["FOO=bar", "BAZ=qux"]
