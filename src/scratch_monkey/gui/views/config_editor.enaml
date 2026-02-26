@@ -1,0 +1,209 @@
+"""Reusable config editor panel for scratch-monkey GUI."""
+
+from enaml.widgets.api import (
+    Container, Label, PushButton, GroupBox, CheckBox, Field, VGroup, HGroup,
+    ObjectCombo, Dialog
+)
+from enaml.core.api import Conditional, Looper
+
+
+enamldef CreateSharedDialog(Dialog): dlg:
+    attr app_model
+    attr _error_msg : str = ""
+
+    title = "Create Shared Volume"
+
+    Container:
+        VGroup:
+            Label:
+                text = "Volume Name:"
+
+            Field: name_field:
+                placeholder = "my-shared-vol"
+                submit_triggers = ['lost_focus', 'return_pressed', 'auto_sync']
+
+            Label: error_label:
+                text << dlg._error_msg
+                visible << bool(dlg._error_msg)
+
+            HGroup:
+                PushButton:
+                    text = "Create"
+                    enabled << bool(name_field.text.strip())
+                    clicked ::
+                        err = dlg.app_model.create_shared_volume(name_field.text.strip())
+                        if err:
+                            dlg._error_msg = err
+                        else:
+                            dlg.close()
+
+                PushButton:
+                    text = "Cancel"
+                    clicked ::
+                        dlg.close()
+
+
+enamldef ConfigEditorPanel(Container): editor:
+    attr model
+    attr available_shared : list = []
+    attr app_model
+
+    padding = 0
+
+    GroupBox:
+        title = "Configuration"
+
+        VGroup:
+            HGroup:
+                Label:
+                    text = "Command:"
+                Field:
+                    text << (editor.model.cmd if editor.model else "")
+                    text ::
+                        if editor.model:
+                            editor.model.cmd = text
+                    submit_triggers = ['lost_focus', 'return_pressed', 'auto_sync']
+
+            HGroup:
+                Label:
+                    text = "Home:"
+                Field:
+                    text << (editor.model.home if editor.model else "")
+                    text ::
+                        if editor.model:
+                            editor.model.home = text
+                    placeholder = "/home/dev"
+                    submit_triggers = ['lost_focus', 'return_pressed', 'auto_sync']
+
+            CheckBox:
+                text = "Wayland"
+                checked << (editor.model.wayland if editor.model else False)
+                toggled ::
+                    if editor.model:
+                        editor.model.wayland = checked
+
+            CheckBox:
+                text = "SSH Agent"
+                checked << (editor.model.ssh if editor.model else False)
+                toggled ::
+                    if editor.model:
+                        editor.model.ssh = checked
+
+            CheckBox:
+                text = "Overlay mode"
+                checked << (editor.model.overlay if editor.model else False)
+                toggled ::
+                    if editor.model:
+                        editor.model.overlay = checked
+
+    GroupBox:
+        title = "Volume Mounts"
+
+        VGroup:
+            Looper:
+                iterable << (list(range(len(editor.model.volume_entries))) if editor.model else [])
+
+                HGroup:
+                    Field:
+                        text << (editor.model.volume_entries[loop.item].host_path if editor.model and loop.item < len(editor.model.volume_entries) else "")
+                        text ::
+                            if editor.model and loop.item < len(editor.model.volume_entries):
+                                editor.model.volume_entries[loop.item].host_path = text
+                        placeholder = "Host path"
+                        submit_triggers = ['lost_focus', 'return_pressed', 'auto_sync']
+
+                    Field:
+                        text << (editor.model.volume_entries[loop.item].container_path if editor.model and loop.item < len(editor.model.volume_entries) else "")
+                        text ::
+                            if editor.model and loop.item < len(editor.model.volume_entries):
+                                editor.model.volume_entries[loop.item].container_path = text
+                        placeholder = "Container path"
+                        submit_triggers = ['lost_focus', 'return_pressed', 'auto_sync']
+
+                    ObjectCombo:
+                        items = ["rw", "ro"]
+                        selected << (editor.model.volume_entries[loop.item].mode if editor.model and loop.item < len(editor.model.volume_entries) else "rw")
+                        selected ::
+                            if editor.model and loop.item < len(editor.model.volume_entries):
+                                editor.model.volume_entries[loop.item].mode = selected
+
+                    PushButton:
+                        text = "X"
+                        clicked ::
+                            if editor.model:
+                                editor.model.remove_volume_entry(loop.item)
+
+            PushButton:
+                text = "+ Add Volume Mount"
+                clicked ::
+                    if editor.model:
+                        editor.model.add_volume_entry()
+
+    GroupBox:
+        title = "Environment Variables"
+
+        VGroup:
+            Looper:
+                iterable << (list(range(len(editor.model.env_vars))) if editor.model else [])
+
+                HGroup:
+                    Field:
+                        text << (editor.model.env_vars[loop.item] if editor.model and loop.item < len(editor.model.env_vars) else "")
+                        text ::
+                            if editor.model and loop.item < len(editor.model.env_vars):
+                                entries = list(editor.model.env_vars)
+                                entries[loop.item] = text
+                                editor.model.env_vars = entries
+                        placeholder = "KEY=value"
+                        submit_triggers = ['lost_focus', 'return_pressed', 'auto_sync']
+
+                    PushButton:
+                        text = "X"
+                        clicked ::
+                            if editor.model:
+                                editor.model.remove_env_var(loop.item)
+
+            PushButton:
+                text = "+ Add Environment Variable"
+                clicked ::
+                    if editor.model:
+                        editor.model.add_env_var()
+
+    GroupBox:
+        title = "Shared Volumes"
+
+        VGroup:
+            Conditional:
+                condition << (len(editor.available_shared) == 0)
+
+                Label:
+                    text = "No shared volumes found."
+
+            Conditional:
+                condition << (len(editor.available_shared) > 0)
+
+                Looper:
+                    iterable << (list(range(len(editor.model.shared_entries))) if editor.model else [])
+
+                    HGroup:
+                        CheckBox:
+                            text << (editor.model.shared_entries[loop.item].name if editor.model and loop.item < len(editor.model.shared_entries) else "")
+                            checked << (editor.model.shared_entries[loop.item].enabled if editor.model and loop.item < len(editor.model.shared_entries) else False)
+                            toggled ::
+                                if editor.model and loop.item < len(editor.model.shared_entries):
+                                    editor.model.shared_entries[loop.item].enabled = checked
+
+                        ObjectCombo:
+                            items = ["rw", "ro"]
+                            selected << (editor.model.shared_entries[loop.item].mode if editor.model and loop.item < len(editor.model.shared_entries) else "rw")
+                            selected ::
+                                if editor.model and loop.item < len(editor.model.shared_entries):
+                                    editor.model.shared_entries[loop.item].mode = selected
+                            enabled << (editor.model.shared_entries[loop.item].enabled if editor.model and loop.item < len(editor.model.shared_entries) else False)
+
+            PushButton:
+                text = "+ New Shared Volume"
+                clicked ::
+                    if editor.app_model:
+                        dlg = CreateSharedDialog(editor, app_model=editor.app_model)
+                        dlg.exec_()

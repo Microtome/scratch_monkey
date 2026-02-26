@@ -14,10 +14,14 @@ except ImportError:
         "Install it with: uv tool install 'scratch-monkey[gui]'"
     )
 
-from ..config import InstanceConfig, save
+from ..config import ConfigError, InstanceConfig, save
 from ..container import PodmanRunner
-from ..instance import InstanceInfo, list_all
+from ..instance import InstanceError, InstanceInfo, create, list_all, skel_copy
 from ..shared import list_shared, parse_shared_entry
+
+_PROJECT_DIR = Path(__file__).parent.parent.parent.parent
+_DEFAULT_BASE_IMAGE = "scratch_dev"
+_FEDORA_IMAGE = "scratch_dev_fedora"
 
 
 def _find_terminal() -> list[str]:
@@ -150,6 +154,17 @@ class InstanceModel(Atom):
             del entries[index]
             self.volume_entries = entries
 
+    def add_env_var(self, value: str = "") -> None:
+        """Append a new environment variable entry."""
+        self.env_vars = [*self.env_vars, value]
+
+    def remove_env_var(self, index: int) -> None:
+        """Remove env var at the given index."""
+        entries = list(self.env_vars)
+        if 0 <= index < len(entries):
+            del entries[index]
+            self.env_vars = entries
+
     def save(self) -> None:
         """Persist the current model state to scratch.toml."""
         config_path = Path(self.directory) / "scratch.toml"
@@ -271,3 +286,42 @@ class AppModel(Atom):
         except Exception as e:
             self.status_message = f"Error: {e}"
         self.refresh()
+
+    def new_instance_model(self) -> InstanceModel:
+        """Create a fresh InstanceModel with shared entries initialized."""
+        m = InstanceModel()
+        self.init_shared_entries(m)
+        return m
+
+    def create_shared_volume(self, name: str) -> str:
+        """Create a new shared volume. Returns '' on success or error string."""
+        from ..config import validate_name
+        from ..shared import SharedError, create_shared
+
+        try:
+            validate_name(name)
+            create_shared(name, Path(self.instances_dir))
+        except (SharedError, ConfigError) as e:
+            return str(e)
+        self.refresh()
+        self.status_message = f"Created shared volume {name!r}"
+        return ""
+
+    def create_instance(
+        self, name: str, *, fedora: bool = False, skel: bool = False, config: InstanceConfig | None = None
+    ) -> str:
+        """Create a new instance. Returns '' on success or error string on failure."""
+        base_image = _FEDORA_IMAGE if fedora else _DEFAULT_BASE_IMAGE
+        try:
+            inst = create(name, Path(self.instances_dir), base_image, _PROJECT_DIR)
+        except (InstanceError, ConfigError) as e:
+            return str(e)
+        if skel:
+            skel_copy(inst)
+        if config is not None:
+            config_path = inst.directory / "scratch.toml"
+            save(config_path, config)
+        self.refresh()
+        self.selected_instance = name
+        self.status_message = f"Created instance {name!r}"
+        return ""
