@@ -5,24 +5,27 @@ from __future__ import annotations
 import sys
 from pathlib import Path
 
+import click
 
-def main() -> None:
-    """Launch the scratch-monkey GUI application."""
+from ..config import DEFAULT_INSTANCES_DIR
+
+
+def launch(instances_dir: Path) -> None:
+    """Launch the GUI application. Called by both entry points."""
     try:
         import enaml
+
+        from .models import AppModel
     except ImportError:
-        print(
+        click.echo(
             "Error: GUI dependencies not installed.\n"
-            "Install with: pip install 'scratch-monkey[gui]'",
-            file=sys.stderr,
+            "Install with: uv tool install --editable '.[gui]'",
+            err=True,
         )
         sys.exit(1)
 
-
     from ..container import PodmanRunner
-    from .models import AppModel
 
-    instances_dir = Path.home() / "scratch-monkey"
     runner = PodmanRunner()
     app_model = AppModel(instances_dir, runner)
 
@@ -35,3 +38,17 @@ def main() -> None:
     view = ScratchMonkeyWindow(app_model=app_model)
     view.show()
     app.start()
+
+
+@click.command()
+@click.option(
+    "--instances-dir",
+    envvar="SCRATCH_MONKEY_INSTANCES_DIR",
+    default=str(DEFAULT_INSTANCES_DIR),
+    show_default=True,
+    show_envvar=True,
+    help="Directory where instances are stored.",
+)
+def gui_cli(instances_dir: str) -> None:
+    """Launch the scratch-monkey GUI."""
+    launch(Path(instances_dir))
