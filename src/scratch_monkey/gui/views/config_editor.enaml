@@ -96,6 +96,13 @@ enamldef ConfigEditorPanel(Container): editor:
                     if editor.model:
                         editor.model.overlay = checked
 
+            CheckBox:
+                text = "GPU Passthrough"
+                checked << (editor.model.gpu if editor.model else False)
+                toggled ::
+                    if editor.model:
+                        editor.model.gpu = checked
+
     GroupBox:
         title = "Volume Mounts"
 
@@ -172,6 +179,40 @@ enamldef ConfigEditorPanel(Container): editor:
                 clicked ::
                     if editor.model:
                         editor.model.add_env_var()
+
+    GroupBox:
+        title = "Devices"
+
+        VGroup:
+            Looper:
+                iterable << (list(range(len(editor.model.devices))) if editor.model else [])
+
+                HGroup:
+                    Field:
+                        text << (editor.model.devices[loop.item] if editor.model and loop.item < len(editor.model.devices) else "")
+                        text ::
+                            if editor.model and loop.item < len(editor.model.devices):
+                                entries = list(editor.model.devices)
+                                entries[loop.item] = text
+                                editor.model.devices = entries
+                                editor.model.check_dirty()
+                        placeholder = "/dev/bus/usb"
+                        submit_triggers = ['lost_focus', 'return_pressed', 'auto_sync']
+
+                    PushButton:
+                        text = "X"
+                        clicked ::
+                            if editor.model:
+                                entries = list(editor.model.devices)
+                                if 0 <= loop.item < len(entries):
+                                    del entries[loop.item]
+                                    editor.model.devices = entries
+
+            PushButton:
+                text = "+ Add Device"
+                clicked ::
+                    if editor.model:
+                        editor.model.devices = [*editor.model.devices, ""]
 
     GroupBox:
         title = "Shared Volumes"

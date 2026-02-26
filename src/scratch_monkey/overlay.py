@@ -14,6 +14,21 @@ class OverlayError(Exception):
     """Raised for overlay container operation errors."""
 
 
+def _gpu_devices() -> list[str]:
+    """Detect available GPU device paths."""
+    devices = []
+    if os.path.exists("/dev/dri"):
+        devices.append("/dev/dri")
+    if os.path.exists("/dev/kfd"):
+        devices.append("/dev/kfd")
+    # NVIDIA devices
+    for name in ("nvidia0", "nvidiactl", "nvidia-modeset", "nvidia-uvm", "nvidia-uvm-tools"):
+        path = f"/dev/{name}"
+        if os.path.exists(path):
+            devices.append(path)
+    return devices
+
+
 def _overlay_name(instance: Instance) -> str:
     return f"{instance.name}-overlay"
 
@@ -91,6 +106,15 @@ def _build_run_args(instance: Instance) -> list[str]:
     # Extra env vars
     for var in cfg.env:
         args += ["-e", var]
+
+    # GPU passthrough
+    if cfg.gpu:
+        for dev in _gpu_devices():
+            args += ["--device", dev]
+
+    # Extra devices
+    for dev in cfg.devices:
+        args += ["--device", dev]
 
     return args
 
