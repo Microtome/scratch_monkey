@@ -12,6 +12,7 @@ from scratch_monkey.shared import (
     create_shared,
     delete_shared,
     list_shared,
+    parse_shared_entry,
     remove_from_instance,
 )
 
@@ -184,3 +185,21 @@ class TestListShared:
         result = list_shared(instances_dir)
         data_info = result[0]
         assert data_info.used_by == []
+
+
+# ─── parse_shared_entry ───────────────────────────────────────────────────────
+
+
+class TestParseSharedEntry:
+    def test_bare_name_defaults_to_rw(self):
+        assert parse_shared_entry("comms") == ("comms", "rw")
+
+    def test_name_with_ro(self):
+        assert parse_shared_entry("comms:ro") == ("comms", "ro")
+
+    def test_name_with_rw(self):
+        assert parse_shared_entry("comms:rw") == ("comms", "rw")
+
+    def test_invalid_mode_raises(self):
+        with pytest.raises(SharedError, match="Invalid shared volume mode"):
+            parse_shared_entry("comms:invalid")

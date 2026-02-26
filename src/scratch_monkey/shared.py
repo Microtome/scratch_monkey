@@ -18,6 +18,19 @@ def _shared_dir(instances_dir: Path, name: str) -> Path:
     return instances_dir / ".shared" / name
 
 
+def parse_shared_entry(entry: str) -> tuple[str, str]:
+    """Parse 'name' or 'name:ro' -> (name, mode). Default mode is 'rw'."""
+    if ":" in entry:
+        name, mode = entry.rsplit(":", 1)
+        if mode not in ("ro", "rw"):
+            raise SharedError(
+                f"Invalid shared volume mode {mode!r} in {entry!r}. "
+                "Use 'ro' or 'rw'."
+            )
+        return name, mode
+    return entry, "rw"
+
+
 def create_shared(name: str, instances_dir: Path) -> Path:
     """Create a shared volume directory.
 
