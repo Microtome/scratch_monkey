@@ -1,5 +1,10 @@
 """Instance list panel for scratch-monkey GUI."""
 
+import enaml
+with enaml.imports():
+    from enaml.stdlib.message_box import question
+from enaml.stdlib.dialog_buttons import DialogButton
+
 from enaml.widgets.api import Container, PushButton, ScrollArea, VGroup
 from enaml.layout.api import vbox
 from enaml.core.api import Looper
@@ -24,7 +29,17 @@ enamldef InstanceListPanel(Container): panel:
                         else "[no img]  "
                     ) + inst.name
                     clicked ::
-                        app_model.selected_instance = inst.name
+                        proceed = True
+                        if app_model.selected and app_model.selected.dirty:
+                            result = question(
+                                panel,
+                                "Unsaved Changes",
+                                f"Instance '{app_model.selected_instance}' has unsaved changes. Discard them?",
+                                [DialogButton('Discard', 'accept'), DialogButton('Cancel', 'reject')],
+                            )
+                            proceed = result is not None and result.action == 'accept'
+                        if proceed:
+                            app_model.selected_instance = inst.name
 
     PushButton: new_btn:
         text = "+ New Instance"

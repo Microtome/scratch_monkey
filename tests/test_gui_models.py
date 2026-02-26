@@ -423,3 +423,125 @@ class TestInstanceModelEnvVars:
         m.env_vars = ["FOO=bar", "BAZ=qux"]
         cfg = m.to_config()
         assert cfg.env == ["FOO=bar", "BAZ=qux"]
+
+
+class TestInstanceModelDirty:
+    """Tests for InstanceModel dirty tracking."""
+
+    def _make_info(self, **kwargs):
+        cfg = InstanceConfig(**kwargs)
+        return InstanceInfo(
+            name="test",
+            directory="/tmp/test",
+            image_built=False,
+            overlay_running=False,
+            config=cfg,
+        )
+
+    def test_not_dirty_after_from_info(self):
+        info = self._make_info(cmd="/bin/bash")
+        m = InstanceModel.from_info(info)
+        assert m.dirty is False
+
+    def test_dirty_after_scalar_change(self):
+        info = self._make_info(cmd="/bin/bash")
+        m = InstanceModel.from_info(info)
+        m.cmd = "/bin/zsh"
+        assert m.dirty is True
+
+    def test_dirty_after_bool_change(self):
+        info = self._make_info()
+        m = InstanceModel.from_info(info)
+        m.wayland = True
+        assert m.dirty is True
+
+    def test_not_dirty_after_save(self, tmp_path):
+        # Create a real instance dir so save() works
+        inst_dir = tmp_path / "test"
+        inst_dir.mkdir()
+        info = InstanceInfo(
+            name="test",
+            directory=str(inst_dir),
+            image_built=False,
+            overlay_running=False,
+            config=InstanceConfig(),
+        )
+        m = InstanceModel.from_info(info)
+        m.cmd = "/bin/zsh"
+        assert m.dirty is True
+        m.save()
+        assert m.dirty is False
+
+    def test_revert_restores_saved_state(self):
+        info = self._make_info(cmd="/bin/bash", wayland=False)
+        m = InstanceModel.from_info(info)
+        m.cmd = "/bin/zsh"
+        m.wayland = True
+        assert m.dirty is True
+        m.revert()
+        assert m.dirty is False
+        assert m.cmd == "/bin/bash"
+        assert m.wayland is False
+
+    def test_check_dirty_detects_nested_change(self):
+        info = self._make_info(volumes=["/a:/b"])
+        m = InstanceModel.from_info(info)
+        assert m.dirty is False
+        # In-place mutation (won't trigger list observer)
+        m.volume_entries[0].host_path = "/changed"
+        # Must call check_dirty explicitly
+        m.check_dirty()
+        assert m.dirty is True
+
+    def test_revert_restores_volumes(self):
+        info = self._make_info(volumes=["/a:/b", "/c:/d:ro"])
+        m = InstanceModel.from_info(info)
+        m.volume_entries = []  # remove all
+        assert m.dirty is True
+        m.revert()
+        assert m.dirty is False
+        assert len(m.volume_entries) == 2
+        assert m.volume_entries[0].host_path == "/a"
+
+    def test_revert_restores_env_vars(self):
+        info = self._make_info(env=["FOO=bar"])
+        m = InstanceModel.from_info(info)
+        # Note: from_info stores env in env_vars
+        m.env_vars = ["CHANGED=1"]
+        assert m.dirty is True
+        m.revert()
+        assert m.dirty is False
+        assert m.env_vars == ["FOO=bar"]
+
+    def test_has_unsaved_changes(self, tmp_path):
+        from unittest.mock import MagicMock, patch
+
+        instances_dir = tmp_path / "scratch-monkey"
+        instances_dir.mkdir()
+
+        runner = MagicMock()
+        runner.container_exists.return_value = False
+        runner.container_running.return_value = False
+        runner.image_exists.return_value = False
+
+        project_dir = tmp_path / "project"
+        project_dir.mkdir()
+
+        with patch("scratch_monkey.gui.models._PROJECT_DIR", project_dir):
+            app = AppModel(instances_dir=instances_dir, runner=runner)
+
+        # No instances, no unsaved changes
+        assert app.has_unsaved_changes() is False
+
+        # Create an instance
+        with patch("scratch_monkey.gui.models._PROJECT_DIR", project_dir):
+            app.create_instance("myinst")
+
+        # Initially not dirty
+        assert app.has_unsaved_changes() is False
+
+        # Modify the instance
+        inst_model = next(i for i in app.instances if i.name == "myinst")
+        inst_model.cmd = "/bin/zsh"
+
+        assert app.has_unsaved_changes() is True
