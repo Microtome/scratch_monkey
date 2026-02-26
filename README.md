@@ -98,7 +98,7 @@ All fields are optional — commented-out defaults are shown when an instance is
 | `home` | string | `""` | Override the instance `home/` dir with a custom path |
 | `volumes` | list | `[]` | Extra volume mounts (`host:container:mode`) |
 | `env` | list | `[]` | Extra environment variables (`KEY=value`) |
-| `shared` | list | `[]` | Shared volume names (mounted at `/shared/<name>`) |
+| `shared` | list | `[]` | Shared volume names (mounted at `/shared/<name>`; append `:ro` for read-only) |
 | `overlay` | bool | `false` | Enable overlay mode (persistent writable layer) |
 
 Example:
@@ -108,7 +108,7 @@ cmd = "/bin/zsh"
 wayland = true
 ssh = true
 volumes = ["/home/linuxbrew/.linuxbrew:/home/linuxbrew/.linuxbrew:ro"]
-shared = ["comms"]
+shared = ["comms", "data:ro"]
 overlay = true
 ```
 
@@ -161,6 +161,12 @@ scratch-monkey share remove comms agent1  # remove from instance config
 scratch-monkey share delete comms         # delete the volume directory
 ```
 
+Shared volumes default to read-write. Append `:ro` in `scratch.toml` to mount read-only:
+
+```toml
+shared = ["comms", "data:ro"]
+```
+
 ---
 
 ## Exporting commands
@@ -178,6 +184,24 @@ The generated script:
 1. If already inside the instance, execs the command directly
 2. If the overlay container is running, execs into it
 3. Otherwise, launches a one-shot `podman run --rm`
+
+---
+
+## GUI
+
+A graphical interface is available when installed with GUI dependencies:
+
+```bash
+uv tool install --editable ".[gui]"
+scratch-monkey-gui
+```
+
+The GUI provides:
+- Instance list with image/overlay status
+- Configuration editing (cmd, wayland, ssh, overlay)
+- Volume mount management (add/remove host:container mounts, set rw/ro mode)
+- Shared volume toggling (enable/disable per-instance, set rw/ro mode)
+- Action buttons (enter, enter as root, build, reset overlay, delete)
 
 ---
 
@@ -278,7 +302,8 @@ Global options (before the command):
 
 ```bash
 uv tool install --editable .      # install CLI
-uv run pytest                     # 135 unit tests, no real podman needed
+uv run pytest                     # unit tests, no real podman needed
+uv run --all-extras pytest        # include GUI smoke tests
 uv run ruff check src tests       # lint
 uv run ruff format src tests      # format
 ```
