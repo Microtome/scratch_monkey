@@ -339,6 +339,62 @@ class TestAppModelCreateInstance:
         assert m.shared_entries[0].name == "comms"
 
 
+class TestAppModelCreateSharedVolume:
+    """Tests for AppModel.create_shared_volume()."""
+
+    def _make_app(self, tmp_path):
+        from unittest.mock import MagicMock, patch
+
+        instances_dir = tmp_path / "scratch-monkey"
+        instances_dir.mkdir()
+
+        runner = MagicMock()
+        runner.container_exists.return_value = False
+        runner.container_running.return_value = False
+        runner.image_exists.return_value = False
+
+        project_dir = tmp_path / "project"
+        project_dir.mkdir()
+
+        with patch("scratch_monkey.gui.models._PROJECT_DIR", project_dir):
+            app = AppModel(instances_dir=instances_dir, runner=runner)
+
+        return app, instances_dir, project_dir
+
+    def test_create_shared_volume_success(self, tmp_path):
+        from unittest.mock import patch
+
+        app, instances_dir, project_dir = self._make_app(tmp_path)
+
+        with patch("scratch_monkey.gui.models._PROJECT_DIR", project_dir):
+            result = app.create_shared_volume("mydata")
+
+        assert result == ""
+        assert (instances_dir / ".shared" / "mydata").is_dir()
+        assert "mydata" in app.available_shared
+
+    def test_create_shared_volume_duplicate(self, tmp_path):
+        from unittest.mock import patch
+
+        app, instances_dir, project_dir = self._make_app(tmp_path)
+
+        with patch("scratch_monkey.gui.models._PROJECT_DIR", project_dir):
+            app.create_shared_volume("dup")
+            result = app.create_shared_volume("dup")
+
+        assert result != ""
+
+    def test_create_shared_volume_invalid_name(self, tmp_path):
+        from unittest.mock import patch
+
+        app, instances_dir, project_dir = self._make_app(tmp_path)
+
+        with patch("scratch_monkey.gui.models._PROJECT_DIR", project_dir):
+            result = app.create_shared_volume("bad name!")
+
+        assert result != ""
+
+
 class TestInstanceModelEnvVars:
     def test_add_env_var_default(self):
         m = InstanceModel()

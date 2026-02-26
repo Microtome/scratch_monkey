@@ -2,14 +2,51 @@
 
 from enaml.widgets.api import (
     Container, Label, PushButton, GroupBox, CheckBox, Field, VGroup, HGroup,
-    ObjectCombo
+    ObjectCombo, Dialog
 )
 from enaml.core.api import Conditional, Looper
+
+
+enamldef CreateSharedDialog(Dialog): dlg:
+    attr app_model
+    attr _error_msg : str = ""
+
+    title = "Create Shared Volume"
+
+    Container:
+        VGroup:
+            Label:
+                text = "Volume Name:"
+
+            Field: name_field:
+                placeholder = "my-shared-vol"
+                submit_triggers = ['lost_focus', 'return_pressed', 'auto_sync']
+
+            Label: error_label:
+                text << dlg._error_msg
+                visible << bool(dlg._error_msg)
+
+            HGroup:
+                PushButton:
+                    text = "Create"
+                    enabled << bool(name_field.text.strip())
+                    clicked ::
+                        err = dlg.app_model.create_shared_volume(name_field.text.strip())
+                        if err:
+                            dlg._error_msg = err
+                        else:
+                            dlg.close()
+
+                PushButton:
+                    text = "Cancel"
+                    clicked ::
+                        dlg.close()
 
 
 enamldef ConfigEditorPanel(Container): editor:
     attr model
     attr available_shared : list = []
+    attr app_model
 
     padding = 0
 
@@ -163,3 +200,10 @@ enamldef ConfigEditorPanel(Container): editor:
                                 if editor.model and loop.item < len(editor.model.shared_entries):
                                     editor.model.shared_entries[loop.item].mode = selected
                             enabled << (editor.model.shared_entries[loop.item].enabled if editor.model and loop.item < len(editor.model.shared_entries) else False)
+
+            PushButton:
+                text = "+ New Shared Volume"
+                clicked ::
+                    if editor.app_model:
+                        dlg = CreateSharedDialog(editor, app_model=editor.app_model)
+                        dlg.exec_()

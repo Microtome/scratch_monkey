@@ -293,6 +293,20 @@ class AppModel(Atom):
         self.init_shared_entries(m)
         return m
 
+    def create_shared_volume(self, name: str) -> str:
+        """Create a new shared volume. Returns '' on success or error string."""
+        from ..config import validate_name
+        from ..shared import SharedError, create_shared
+
+        try:
+            validate_name(name)
+            create_shared(name, Path(self.instances_dir))
+        except (SharedError, ConfigError) as e:
+            return str(e)
+        self.refresh()
+        self.status_message = f"Created shared volume {name!r}"
+        return ""
+
     def create_instance(
         self, name: str, *, fedora: bool = False, skel: bool = False, config: InstanceConfig | None = None
     ) -> str:
