@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+import sys
 
 from .container import PodmanError, PodmanRunner
 from .instance import Instance, is_fedora_based
@@ -81,6 +82,11 @@ def _build_run_args(instance: Instance) -> list[str]:
             if mode == "ro":
                 mount_spec += ":ro"
             args += ["-v", mount_spec]
+        else:
+            print(
+                f"Warning: shared volume {shared_name!r} not found, skipping.",
+                file=sys.stderr,
+            )
 
     # Extra env vars
     for var in cfg.env:

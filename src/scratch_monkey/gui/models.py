@@ -17,7 +17,7 @@ except ImportError:
 from ..config import InstanceConfig, save
 from ..container import PodmanRunner
 from ..instance import InstanceInfo, list_all
-from ..shared import list_shared
+from ..shared import list_shared, parse_shared_entry
 
 
 def _find_terminal() -> list[str]:
@@ -195,17 +195,13 @@ class AppModel(Atom):
 
     def init_shared_entries(self, model: InstanceModel) -> None:
         """Build SharedVolumeEntry list from available shared + instance config."""
-        # Parse current config shared entries into a dict of name -> mode
         config_shared: dict[str, str] = {}
         for entry in model.shared:
-            if ":" in entry:
-                name, mode = entry.rsplit(":", 1)
-                if mode in ("ro", "rw"):
-                    config_shared[name] = mode
-                else:
-                    config_shared[entry] = "rw"
-            else:
-                config_shared[entry] = "rw"
+            try:
+                name, mode = parse_shared_entry(entry)
+            except Exception:
+                name, mode = entry, "rw"
+            config_shared[name] = mode
 
         entries = []
         for name in self.available_shared:
@@ -219,8 +215,8 @@ class AppModel(Atom):
         instances_dir = Path(self.instances_dir)
         try:
             infos = list_all(instances_dir, self._runner)
-            self.instances = [InstanceModel.from_info(i) for i in infos]
             self.available_shared = [v.name for v in list_shared(instances_dir)]
+            self.instances = [InstanceModel.from_info(i) for i in infos]
             self.status_message = f"Loaded {len(self.instances)} instance(s)"
         except Exception as e:
             self.status_message = f"Error loading instances: {e}"
