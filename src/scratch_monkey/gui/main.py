@@ -6,7 +6,7 @@ import sys
 from pathlib import Path
 
 
-def main() -> None:
+def main(instances_dir: Path | None = None) -> None:
     """Launch the scratch-monkey GUI application."""
     try:
         import enaml
@@ -22,7 +22,8 @@ def main() -> None:
     from ..container import PodmanRunner
     from .models import AppModel
 
-    instances_dir = Path.home() / "scratch-monkey"
+    if instances_dir is None:
+        instances_dir = Path.home() / "scratch-monkey"
     runner = PodmanRunner()
     app_model = AppModel(instances_dir, runner)
 
