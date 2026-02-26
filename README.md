@@ -1,138 +1,188 @@
-# scratch_dev
+# scratch-monkey
 
-A minimal container dev environment using Docker's `scratch` (empty) base image with host system directories bind-mounted in. Also supports a full `fedora:latest` base. Designed for rootless podman on Fedora/ostree systems.
+A Podman-based dev container manager for rootless Fedora/ostree systems.
 
-## How it works
+Each **instance** is a named environment with its own home directory, customizable Dockerfile, and TOML config. Two base image types are supported:
 
-The scratch Dockerfile uses a multi-stage build to create filesystem symlinks (`/bin` -> `usr/bin`, etc.) that match the Fedora ostree layout, then copies them into a `scratch` image. At runtime, host directories like `/usr` and `/etc` are mounted in read-only, giving you a fully functional shell with no image bloat.
+- **scratch** — empty image with Fedora ostree symlinks; host `/usr`, `/etc`, etc. are bind-mounted read-only. No image bloat, instant startup.
+- **fedora** — full `fedora:latest` image. Self-contained, own package manager, no host mounts.
 
-Alternatively, use the fedora base for a full OS environment with its own package manager — no host mounts needed.
+---
 
-Each scratch-dev **instance** is a named environment with its own home directory, customizable Dockerfile, and config file. Instances live under `$HOME/scratch-dev/`.
+## Install
 
-## Requirements
+```bash
+# Requires uv (https://github.com/astral-sh/uv)
+./install.sh
 
-- [just](https://github.com/casey/just)
-- podman (rootless)
+# Or manually:
+pip install --user -e .
+```
+
+Ensure `~/.local/bin` is in your `PATH`.
+
+---
 
 ## Quick start
 
 ```bash
-# Build the base image
-just build
+# Create an instance (scratch base)
+scratch-monkey create myproject
 
-# Create an instance with shell configs
-just skel=true create myproject
+# Create a fedora-based instance with shell configs copied in
+scratch-monkey create myproject --fedora --skel
 
-# Run it
-just enter myproject
+# Enter an interactive shell
+scratch-monkey enter myproject
+
+# List all instances
+scratch-monkey list
 ```
 
-### Fedora-based instance
-
-```bash
-just fedora=true build
-just skel=true fedora=true create myproject
-just enter myproject
-```
+---
 
 ## Instance management
 
 ```bash
-# Create instances
-just create myproject                       # scratch base
-just fedora=true create myproject           # fedora base
-just skel=true create myproject             # with shell configs
-just skel=true fedora=true create myproject # both
+scratch-monkey create <name>              # scratch base
+scratch-monkey create <name> --fedora     # fedora base
+scratch-monkey create <name> --skel       # copy /etc/skel dotfiles into home
 
-# Copy shell configs to an existing instance
-just skel myproject
+scratch-monkey clone <source> <dest>      # copy Dockerfile + config, fresh home/
+scratch-monkey delete <name>              # prompts for confirmation (--yes to skip)
+scratch-monkey list                       # show all instances with status
 
-# List all instances
-just list
-
-# Clone an instance (copies config + Dockerfile, fresh home dir)
-just clone myproject myproject-v2
-
-# Edit instance files
-just edit myproject                 # scratch.toml (default)
-just edit myproject dockerfile      # Dockerfile
-just edit myproject env             # .env secrets
-
-# Delete an instance
-just delete myproject
+scratch-monkey skel <name>                # copy /etc/skel dotfiles (post-create)
+scratch-monkey edit <name>                # edit scratch.toml ($EDITOR)
+scratch-monkey edit <name> --file dockerfile
+scratch-monkey edit <name> --file env
 ```
 
-Each instance lives at `$HOME/scratch-dev/<name>/` with:
-- `home/` — container home directory (mounted read-write)
-- `Dockerfile` — customizable, extends the base image
-- `scratch.toml` — instance configuration
-- `.env` — environment variables / secrets (KEY=VALUE format)
+Each instance lives at `$HOME/scratch-dev/<name>/`:
+
+```
+myproject/
+  home/         ← container home directory (mounted read-write)
+  Dockerfile    ← customizable, extends the base image
+  scratch.toml  ← instance configuration
+  .env          ← environment variables / secrets (KEY=VALUE, one per line)
+```
+
+---
 
 ## Running
 
 ```bash
-# Interactive shell
-just enter myproject
-
-# Run a specific command
-just run myproject "echo hello && whoami"
-
-# Root shell (drops --userns=keep-id)
-just root=true enter myproject
-
-# Override config flags from the CLI
-just wayland=true ssh=true run myproject
+scratch-monkey enter <name>               # interactive shell
+scratch-monkey enter <name> --root        # root shell
+scratch-monkey run   <name>               # same as enter
+scratch-monkey run   <name> --wayland     # override: enable Wayland
+scratch-monkey run   <name> --ssh         # override: enable SSH agent
+scratch-monkey run   <name> --cmd /bin/zsh
 ```
 
-## Feature flags
+---
 
-Flags can be set in `scratch.toml` per-instance or overridden on the CLI.
+## Configuration (`scratch.toml`)
 
-| Flag | Description |
-|------|-------------|
-| `wayland = true` | Mount Wayland socket, set `WAYLAND_DISPLAY` and `XDG_RUNTIME_DIR` |
-| `ssh = true` | Forward `SSH_AUTH_SOCK` for SSH agent access |
+All fields are optional — commented-out defaults are shown when an instance is created.
 
-Additional volumes (e.g., Homebrew) can be added via the `volumes` config in `scratch.toml`:
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `cmd` | string | `/bin/bash` | Command to run on entry |
+| `wayland` | bool | `false` | Mount Wayland socket, set `WAYLAND_DISPLAY` |
+| `ssh` | bool | `false` | Forward `SSH_AUTH_SOCK` for SSH agent access |
+| `home` | string | `""` | Override the instance `home/` dir with a custom path |
+| `volumes` | list | `[]` | Extra volume mounts (`host:container:mode`) |
+| `env` | list | `[]` | Extra environment variables (`KEY=value`) |
+| `shared` | list | `[]` | Shared volume names (mounted at `/shared/<name>`) |
+| `overlay` | bool | `false` | Enable overlay mode (persistent writable layer) |
+
+Example:
 
 ```toml
+cmd = "/bin/zsh"
+wayland = true
+ssh = true
 volumes = ["/home/linuxbrew/.linuxbrew:/home/linuxbrew/.linuxbrew:ro"]
+shared = ["comms"]
+overlay = true
 ```
+
+---
+
+## Building
+
+```bash
+# Build the base image
+scratch-monkey build               # scratch base
+scratch-monkey build --fedora      # fedora base
+
+# Build an instance's custom Dockerfile (tagged as the instance name)
+scratch-monkey build-instance <name>
+```
+
+Auto-builds the base if it's missing when you run `enter`.
+
+---
+
+## Overlay mode
+
+When `overlay = true` in `scratch.toml`, a persistent daemon container (`<name>-overlay`) is kept between sessions. Package installs (e.g. `dnf install vim`) survive across runs without rebuilding the image.
+
+```bash
+scratch-monkey enter myproject        # exec into the overlay container
+scratch-monkey enter myproject --root # exec as root
+scratch-monkey reset myproject        # wipe the overlay container (prompts)
+```
+
+> **Note:** Overlay user setup (`useradd`, `sudoers`) is only performed for fedora-based instances. Scratch instances mount `/etc` from the host read-only — the user already exists and sudo works via host config.
+
+---
 
 ## Shared volumes
 
-Shared volumes enable communication between scratch-dev instances via a shared filesystem directory. Since containers already use `--network=host`, shared volumes complement that with a simple, reliable IPC channel for files, unix sockets, FIFOs, or databases.
-
-Shared volumes live at `$HOME/scratch-dev/.shared/<name>/` and are mounted at `/shared/<name>` inside the container.
+Shared volumes let multiple instances share a host directory, useful for IPC via files, sockets, FIFOs, or databases. They live at `$HOME/scratch-dev/.shared/<name>/` and are mounted at `/shared/<name>` inside each container.
 
 ```bash
-# Create a shared volume
-just share-create comms
-
-# Add it to instances
-just share-add comms agent1
-just share-add comms agent2
+scratch-monkey share create comms         # create the shared volume
+scratch-monkey share add    comms agent1  # add to instance config
+scratch-monkey share add    comms agent2
 
 # Both instances now see /shared/comms/ (read-write, same host dir)
-just enter agent1
-just enter agent2
+scratch-monkey enter agent1
+scratch-monkey enter agent2
 
-# List shared volumes and which instances use them
-just share-list
-
-# Remove from an instance
-just share-remove comms agent1
-
-# Delete the shared volume
-just share-delete comms
+scratch-monkey share list                 # list volumes and which instances use them
+scratch-monkey share remove comms agent1  # remove from instance config
+scratch-monkey share delete comms         # delete the volume directory
 ```
+
+---
+
+## Exporting commands
+
+Make a command from an instance available on your host `PATH`:
+
+```bash
+scratch-monkey export myproject /usr/bin/rg          # creates ~/.local/bin/rg
+scratch-monkey export myproject /usr/bin/rg myrg     # custom bin name
+
+scratch-monkey unexport rg
+```
+
+The generated script:
+1. If already inside the instance, execs the command directly
+2. If the overlay container is running, execs into it
+3. Otherwise, launches a one-shot `podman run --rm`
+
+---
 
 ## Customizing the Dockerfile
 
 ### Scratch instances
 
-Instance Dockerfiles extend the base image. `RUN` does not work (no shell in the image) — use `COPY`/`ADD` or multi-stage builds:
+`RUN` does not work (no shell in the image). Use `COPY`/`ADD` or multi-stage builds:
 
 ```dockerfile
 FROM golang:latest AS builder
@@ -148,63 +198,82 @@ Full OS available — `RUN`, `COPY`, `ADD` all work:
 
 ```dockerfile
 FROM scratch_dev_fedora
-RUN dnf install -y git vim
+RUN dnf install -y git vim neovim
 ```
 
-Build and run:
+Build with `scratch-monkey build-instance myproject`, then run normally.
 
-```bash
-just build-instance myproject
-just run myproject
-```
+---
 
 ## What gets mounted
 
 ### Scratch instances
 
 | Host path | Container path | Mode |
-|---|---|---|
+|-----------|---------------|------|
 | `/usr` | `/usr` | read-only |
 | `/etc` | `/etc` | read-only |
 | `/var/usrlocal` | `/var/usrlocal`, `/usr/local` | read-only |
 | `/var/opt` | `/var/opt` | read-only |
-| Instance `home/` | same path | read-write |
+| Instance `home/` | `/home/$USER` | read-write |
 
 ### Fedora instances
 
 | Host path | Container path | Mode |
-|---|---|---|
-| Instance `home/` | same path | read-write |
+|-----------|---------------|------|
+| Instance `home/` | `/home/$USER` | read-write |
 
 Fedora instances use their own filesystem — no host system mounts.
 
-## All recipes
+---
 
-| Recipe | Description |
-|--------|-------------|
-| `just build` | Build the base image (`fedora=true` for fedora) |
-| `just build-instance <name>` | Build an instance's Dockerfile |
-| `just create <name>` | Create an instance (`fedora=true`, `skel=true`) |
-| `just clone <src> <dest>` | Clone an instance |
-| `just delete <name>` | Delete an instance |
-| `just edit <name> [file]` | Edit config (default), dockerfile, or env |
-| `just skel <name>` | Copy /etc/skel configs into instance home |
-| `just list` | List all instances |
-| `just run <name> [cmd]` | Run an instance |
-| `just enter <name>` | Interactive shell (`root=true` for root) |
-| `just shell <name>` | Alias for run |
-| `just share-create <name>` | Create a shared volume |
-| `just share-delete <name>` | Delete a shared volume |
-| `just share-add <name> <instance>` | Add shared volume to an instance |
-| `just share-remove <name> <instance>` | Remove shared volume from an instance |
-| `just share-list` | List shared volumes and usage |
-| `just clean` | Remove the base image |
-| `just clean-instance <name>` | Remove an instance's image |
-| `just status` | Show status |
+## Command reference
+
+| Command | Description |
+|---------|-------------|
+| `create <name>` | Create a new instance (`--fedora`, `--skel`) |
+| `clone <src> <dest>` | Clone an instance (fresh home) |
+| `delete <name>` | Delete an instance (`--yes` to skip confirm) |
+| `list` | List all instances with status |
+| `skel <name>` | Copy /etc/skel dotfiles into home |
+| `edit <name>` | Edit instance files (`--file config\|dockerfile\|env`) |
+| `build` | Build the base image (`--fedora`) |
+| `build-instance <name>` | Build an instance's Dockerfile |
+| `run <name>` | Run an instance (`--root`, `--wayland`, `--ssh`, `--cmd`) |
+| `enter <name>` | Interactive shell (`--root` for root) |
+| `reset <name>` | Remove overlay container (`--yes` to skip confirm) |
+| `export <name> <cmd> [bin]` | Export a command to `~/.local/bin` |
+| `unexport <bin>` | Remove an exported command |
+| `share create <name>` | Create a shared volume |
+| `share delete <name>` | Delete a shared volume |
+| `share add <vol> <instance>` | Add volume to instance config |
+| `share remove <vol> <instance>` | Remove volume from instance config |
+| `share list` | List all shared volumes and usage |
+
+Global options (before the command):
+
+```
+--instances-dir TEXT   Default: ~/scratch-dev
+--base-image TEXT      Default: scratch_dev
+```
+
+---
 
 ## Notes
 
-- Requires **podman** (uses `--userns=keep-id` for correct user mapping)
-- SELinux labeling is disabled for the container (`--security-opt label=disable`)
-- Host networking is enabled (`--network=host`)
-- Use `root=true enter` when you need root access (sudo doesn't work in user namespaces)
+- Requires **rootless podman**
+- Uses `--userns=keep-id` for correct user ID mapping (dropped for `--root`)
+- SELinux labeling disabled for the container (`--security-opt label=disable`)
+- Host networking enabled (`--network=host`)
+- Container hostname is set to `<instance>.<hostname>` for prompt clarity
+
+---
+
+## Development
+
+```bash
+pip install -e ".[dev]"
+python3 -m pytest          # 135 unit tests, no real podman needed
+```
+
+See `justfile` for lint, format, and build recipes (requires `uv`).
