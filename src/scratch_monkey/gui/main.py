@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 import sys
 from pathlib import Path
 
@@ -23,7 +24,11 @@ def main(instances_dir: Path | None = None) -> None:
     from .models import AppModel
 
     if instances_dir is None:
-        instances_dir = Path.home() / "scratch-monkey"
+        env_dir = os.environ.get("SCRATCH_MONKEY_INSTANCES_DIR")
+        if env_dir:
+            instances_dir = Path(env_dir)
+        else:
+            instances_dir = Path.home() / "scratch-monkey"
     runner = PodmanRunner()
     app_model = AppModel(instances_dir, runner)
 
