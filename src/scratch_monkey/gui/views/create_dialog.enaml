@@ -1,6 +1,6 @@
 """Create Instance dialog for scratch-monkey GUI."""
 
-from enaml.widgets.api import Dialog, Container, Label, Field, CheckBox, PushButton, HGroup, VGroup, ScrollArea
+from enaml.widgets.api import Dialog, Container, Label, Field, CheckBox, PushButton, HGroup, VGroup
 
 from scratch_monkey.gui.views.config_editor import ConfigEditorPanel
 
@@ -11,50 +11,48 @@ enamldef CreateInstanceDialog(Dialog): dlg:
     attr _error_msg : str = ""
 
     title = "Create Instance"
-    initial_size = (500, 600)
 
-    ScrollArea:
-        Container:
-            VGroup:
-                Label:
-                    text = "Instance Name (required):"
+    Container:
+        VGroup:
+            Label:
+                text = "Instance Name (required):"
 
-                Field: name_field:
-                    placeholder = "my-instance"
-                    submit_triggers = ['lost_focus', 'return_pressed', 'auto_sync']
+            Field: name_field:
+                placeholder = "my-instance"
+                submit_triggers = ['lost_focus', 'return_pressed', 'auto_sync']
 
-                CheckBox: fedora_cb:
-                    text = "Fedora base image"
+            CheckBox: fedora_cb:
+                text = "Fedora base image"
 
-                CheckBox: skel_cb:
-                    text = "Copy /etc/skel"
+            CheckBox: skel_cb:
+                text = "Copy /etc/skel"
 
-                ConfigEditorPanel:
-                    model = dlg.instance_model
-                    available_shared << dlg.app_model.available_shared if dlg.app_model else []
+            ConfigEditorPanel:
+                model = dlg.instance_model
+                available_shared << dlg.app_model.available_shared if dlg.app_model else []
 
-                Label: error_label:
-                    text << dlg._error_msg
-                    visible << bool(dlg._error_msg)
+            Label: error_label:
+                text << dlg._error_msg
+                visible << bool(dlg._error_msg)
 
-                HGroup:
-                    PushButton:
-                        text = "Create"
-                        enabled << bool(name_field.text.strip())
-                        clicked ::
-                            cfg = dlg.instance_model.to_config() if dlg.instance_model else None
-                            err = app_model.create_instance(
-                                name_field.text.strip(),
-                                fedora=fedora_cb.checked,
-                                skel=skel_cb.checked,
-                                config=cfg,
-                            )
-                            if err:
-                                dlg._error_msg = err
-                            else:
-                                dlg.close()
-
-                    PushButton:
-                        text = "Cancel"
-                        clicked ::
+            HGroup:
+                PushButton:
+                    text = "Create"
+                    enabled << bool(name_field.text.strip())
+                    clicked ::
+                        cfg = dlg.instance_model.to_config() if dlg.instance_model else None
+                        err = app_model.create_instance(
+                            name_field.text.strip(),
+                            fedora=fedora_cb.checked,
+                            skel=skel_cb.checked,
+                            config=cfg,
+                        )
+                        if err:
+                            dlg._error_msg = err
+                        else:
                             dlg.close()
+
+                PushButton:
+                    text = "Cancel"
+                    clicked ::
+                        dlg.close()
