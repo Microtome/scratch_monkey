@@ -63,6 +63,7 @@ enamldef ConfigEditorPanel(Container): editor:
                         if editor.model:
                             editor.model.cmd = text
                     submit_triggers = ['lost_focus', 'return_pressed', 'auto_sync']
+                    tool_tip = "Shell command to run when entering the instance"
 
             HGroup:
                 Label:
@@ -74,6 +75,7 @@ enamldef ConfigEditorPanel(Container): editor:
                             editor.model.home = text
                     placeholder = "/home/dev"
                     submit_triggers = ['lost_focus', 'return_pressed', 'auto_sync']
+                    tool_tip = "Home directory path inside the container"
 
             CheckBox:
                 text = "Wayland"
@@ -81,6 +83,7 @@ enamldef ConfigEditorPanel(Container): editor:
                 toggled ::
                     if editor.model:
                         editor.model.wayland = checked
+                tool_tip = "Forward Wayland display socket for GUI applications"
 
             CheckBox:
                 text = "SSH Agent"
@@ -88,6 +91,7 @@ enamldef ConfigEditorPanel(Container): editor:
                 toggled ::
                     if editor.model:
                         editor.model.ssh = checked
+                tool_tip = "Forward SSH agent socket into the container"
 
             CheckBox:
                 text = "Overlay mode"
@@ -95,6 +99,7 @@ enamldef ConfigEditorPanel(Container): editor:
                 toggled ::
                     if editor.model:
                         editor.model.overlay = checked
+                tool_tip = "Run a persistent overlay container instead of a fresh one each time"
 
             CheckBox:
                 text = "GPU Passthrough"
@@ -102,6 +107,7 @@ enamldef ConfigEditorPanel(Container): editor:
                 toggled ::
                     if editor.model:
                         editor.model.gpu = checked
+                tool_tip = "Auto-detect and pass through GPU devices (/dev/dri, /dev/kfd, /dev/nvidia*)"
 
     GroupBox:
         title = "Volume Mounts"
@@ -148,6 +154,7 @@ enamldef ConfigEditorPanel(Container): editor:
                 clicked ::
                     if editor.model:
                         editor.model.add_volume_entry()
+                tool_tip = "Mount a host directory into the container"
 
     GroupBox:
         title = "Environment Variables"
@@ -179,6 +186,7 @@ enamldef ConfigEditorPanel(Container): editor:
                 clicked ::
                     if editor.model:
                         editor.model.add_env_var()
+                tool_tip = "Add a KEY=value environment variable"
 
     GroupBox:
         title = "Devices"
@@ -213,6 +221,7 @@ enamldef ConfigEditorPanel(Container): editor:
                 clicked ::
                     if editor.model:
                         editor.model.devices = [*editor.model.devices, ""]
+                tool_tip = "Pass through a host device (e.g. /dev/video0)"
 
     GroupBox:
         title = "Shared Volumes"
@@ -254,3 +263,4 @@ enamldef ConfigEditorPanel(Container): editor:
                     if editor.app_model:
                         dlg = CreateSharedDialog(editor, app_model=editor.app_model)
                         dlg.exec_()
+                tool_tip = "Create a new named volume shared across instances"
