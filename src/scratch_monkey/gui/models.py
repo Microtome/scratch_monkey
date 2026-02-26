@@ -305,7 +305,7 @@ class AppModel(Atom):
         if skel:
             skel_copy(inst)
         if config is not None:
-            config_path = inst / "scratch.toml"
+            config_path = inst.directory / "scratch.toml"
             save(config_path, config)
         self.refresh()
         self.selected_instance = name
