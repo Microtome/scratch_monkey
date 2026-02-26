@@ -1,0 +1,50 @@
+"""Create Instance dialog for scratch-monkey GUI."""
+
+from enaml.widgets.api import Dialog, Container, Label, Field, CheckBox, PushButton, HGroup, VGroup
+from enaml.layout.api import vbox
+
+
+enamldef CreateInstanceDialog(Dialog): dlg:
+    attr app_model
+    attr _error_msg : str = ""
+
+    title = "Create Instance"
+    initial_size = (400, 250)
+
+    Container:
+        VGroup:
+            Label:
+                text = "Instance Name:"
+
+            Field: name_field:
+                placeholder = "my-instance"
+
+            CheckBox: fedora_cb:
+                text = "Fedora base image"
+
+            CheckBox: skel_cb:
+                text = "Copy /etc/skel"
+
+            Label: error_label:
+                text << dlg._error_msg
+                visible << bool(dlg._error_msg)
+
+            HGroup:
+                PushButton:
+                    text = "Create"
+                    enabled << bool(name_field.text.strip())
+                    clicked ::
+                        err = app_model.create_instance(
+                            name_field.text.strip(),
+                            fedora=fedora_cb.checked,
+                            skel=skel_cb.checked,
+                        )
+                        if err:
+                            dlg._error_msg = err
+                        else:
+                            dlg.close()
+
+                PushButton:
+                    text = "Cancel"
+                    clicked ::
+                        dlg.close()
