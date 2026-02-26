@@ -1,7 +1,9 @@
 __pycache__/
+__enamlcache__/
 *.pyc
 *.pyo
 *.pyd
+*.enamlc
 .Python
 *.egg-info/
 dist/
