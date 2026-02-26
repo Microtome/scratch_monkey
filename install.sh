@@ -27,8 +27,21 @@ fi
 
 # ─── Install ──────────────────────────────────────────────────────────────────
 
+# Parse options
+WITH_GUI=false
+for arg in "$@"; do
+    case "$arg" in
+        --gui) WITH_GUI=true ;;
+    esac
+done
+
+INSTALL_SPEC="."
+if $WITH_GUI; then
+    INSTALL_SPEC=".[gui]"
+fi
+
 echo "Installing $TOOL_NAME..."
-uv tool install --editable .
+uv tool install --editable "$INSTALL_SPEC" --force
 
 # ─── PATH check ───────────────────────────────────────────────────────────────
 
