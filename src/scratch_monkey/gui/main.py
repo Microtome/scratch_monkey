@@ -27,11 +27,11 @@ def main() -> None:
     app_model = AppModel(instances_dir, runner)
 
     with enaml.imports():
-        from .views.main_window import MainWindow
+        from .views.main_window import ScratchMonkeyWindow
 
     from enaml.qt.qt_application import QtApplication
 
     app = QtApplication()
-    view = MainWindow(app_model=app_model)
+    view = ScratchMonkeyWindow(app_model=app_model)
     view.show()
     app.start()

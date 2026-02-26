@@ -12,11 +12,14 @@ Each **instance** is a named environment with its own home directory, customizab
 ## Install
 
 ```bash
-# Requires uv (https://github.com/astral-sh/uv)
+# Recommended: run the install script (installs uv if needed, then the tool)
 ./install.sh
 
-# Or manually:
-pip install --user -e .
+# Or manually with uv:
+uv tool install --editable .
+
+# With GUI support:
+uv tool install --editable ".[gui]"
 ```
 
 Ensure `~/.local/bin` is in your `PATH`.
@@ -271,9 +274,13 @@ Global options (before the command):
 
 ## Development
 
+[uv](https://github.com/astral-sh/uv) is required. The `install.sh` script installs it if missing.
+
 ```bash
-pip install -e ".[dev]"
-python3 -m pytest          # 135 unit tests, no real podman needed
+uv tool install --editable .      # install CLI
+uv run pytest                     # 135 unit tests, no real podman needed
+uv run ruff check src tests       # lint
+uv run ruff format src tests      # format
 ```
 
-See `justfile` for lint, format, and build recipes (requires `uv`).
+See `justfile` for the full list of dev recipes (`just test`, `just lint`, `just fmt`, etc.).

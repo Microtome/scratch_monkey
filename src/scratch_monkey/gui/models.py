@@ -5,7 +5,7 @@ from __future__ import annotations
 from pathlib import Path
 
 try:
-    from atom.api import Atom, Bool, List, Str
+    from atom.api import Atom, Bool, List, Str, Value
 except ImportError:
     raise ImportError(
         "The GUI requires the 'enaml' package. "
@@ -78,6 +78,8 @@ class AppModel(Atom):
     instances = List(InstanceModel)
     selected_instance = Str("")  # name of selected instance
     status_message = Str("")
+    # PodmanRunner stored as a Value member so Atom allows it
+    _runner = Value()
 
     def __init__(self, instances_dir: Path, runner: PodmanRunner | None = None) -> None:
         super().__init__()
@@ -87,7 +89,6 @@ class AppModel(Atom):
 
     def refresh(self) -> None:
         """Reload all instances from disk."""
-
         instances_dir = Path(self.instances_dir)
         try:
             infos = list_all(instances_dir, self._runner)

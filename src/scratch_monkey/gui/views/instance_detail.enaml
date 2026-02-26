@@ -1,35 +1,27 @@
 """Instance detail panel for scratch-monkey GUI."""
 
 from enaml.widgets.api import (
-    Container, Label, PushButton, GroupBox, HGroup, VGroup,
-    CheckBox, Field
+    Container, Label, PushButton, GroupBox, Form, CheckBox, Field, VGroup, HGroup
 )
 from enaml.layout.api import vbox, hbox, spacer
 from enaml.core.api import Conditional
 
 
 enamldef InstanceDetailPanel(Container): panel:
-    """Detail view for a selected instance with config editor and action buttons."""
     attr app_model
 
     Conditional:
-        condition << app_model.selected is None
+        condition << app_model.selected_instance == ""
 
         Label:
             text = "Select an instance from the list."
 
     Conditional:
-        condition << app_model.selected is not None
+        condition << app_model.selected_instance != ""
 
-        VGroup: detail:
-            attr inst << app_model.selected
-
+        VGroup:
             Label:
-                text << f"Instance: {inst.name if inst else ''}"
-                font = "bold 14px"
-
-            Label:
-                text << f"Directory: {inst.directory if inst else ''}"
+                text << f"Instance: {app_model.selected_instance}"
 
             GroupBox:
                 title = "Configuration"
@@ -38,38 +30,38 @@ enamldef InstanceDetailPanel(Container): panel:
                     HGroup:
                         Label:
                             text = "Command:"
-                        Field:
-                            text << (inst.cmd if inst else "")
+                        Field: cmd_field:
+                            text << (app_model.selected.cmd if app_model.selected else "")
                             text ::
-                                if inst:
-                                    inst.cmd = text
+                                if app_model.selected:
+                                    app_model.selected.cmd = text
 
-                    CheckBox:
+                    CheckBox: wayland_cb:
                         text = "Wayland"
-                        checked << (inst.wayland if inst else False)
+                        checked << (app_model.selected.wayland if app_model.selected else False)
                         toggled ::
-                            if inst:
-                                inst.wayland = checked
+                            if app_model.selected:
+                                app_model.selected.wayland = checked
 
-                    CheckBox:
+                    CheckBox: ssh_cb:
                         text = "SSH Agent"
-                        checked << (inst.ssh if inst else False)
+                        checked << (app_model.selected.ssh if app_model.selected else False)
                         toggled ::
-                            if inst:
-                                inst.ssh = checked
+                            if app_model.selected:
+                                app_model.selected.ssh = checked
 
-                    CheckBox:
+                    CheckBox: overlay_cb:
                         text = "Overlay mode"
-                        checked << (inst.overlay if inst else False)
+                        checked << (app_model.selected.overlay if app_model.selected else False)
                         toggled ::
-                            if inst:
-                                inst.overlay = checked
+                            if app_model.selected:
+                                app_model.selected.overlay = checked
 
                     PushButton:
                         text = "Save Config"
                         clicked ::
-                            if inst:
-                                inst.save()
+                            if app_model.selected:
+                                app_model.selected.save()
 
             GroupBox:
                 title = "Actions"
@@ -78,24 +70,24 @@ enamldef InstanceDetailPanel(Container): panel:
                     PushButton:
                         text = "Enter"
                         clicked ::
-                            pass  # TODO: launch terminal
+                            pass
 
                     PushButton:
                         text = "Enter as Root"
                         clicked ::
-                            pass  # TODO: launch terminal as root
+                            pass
 
                     PushButton:
                         text = "Build"
                         clicked ::
-                            pass  # TODO: build instance image
+                            pass
 
                     PushButton:
                         text = "Reset Overlay"
                         clicked ::
-                            pass  # TODO: reset overlay container
+                            pass
 
                     PushButton:
                         text = "Delete"
                         clicked ::
-                            pass  # TODO: confirm and delete
+                            pass

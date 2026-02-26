@@ -1,18 +1,14 @@
 """Main application window for scratch-monkey GUI."""
 
 from enaml.widgets.api import (
-    Window, Container, Label, PushButton, HGroup, VGroup, ScrollArea,
-    Splitter, SplitItem, MainWindow, Action, ToolBar, GroupBox
+    MainWindow, Container, ToolBar, Action, Splitter, SplitItem
 )
-from enaml.layout.api import hbox, vbox, spacer
-from enaml.core.api import Include, Looper
 
 from scratch_monkey.gui.views.instance_list import InstanceListPanel
 from scratch_monkey.gui.views.instance_detail import InstanceDetailPanel
 
 
 enamldef ScratchMonkeyWindow(MainWindow): win:
-    """Main scratch-monkey window."""
     attr app_model
 
     title = "scratch-monkey"
@@ -20,21 +16,12 @@ enamldef ScratchMonkeyWindow(MainWindow): win:
 
     ToolBar:
         Action:
-            text = "New Instance"
-            triggered ::
-                pass  # TODO: open create dialog
-
-        Action:
             text = "Refresh"
             triggered ::
                 app_model.refresh()
 
     Container:
-        constraints = [
-            hbox(splitter)
-        ]
-
-        Splitter: splitter:
+        Splitter:
             SplitItem:
                 InstanceListPanel:
                     app_model = win.app_model
@@ -42,6 +29,3 @@ enamldef ScratchMonkeyWindow(MainWindow): win:
             SplitItem:
                 InstanceDetailPanel:
                     app_model = win.app_model
-
-    Label:
-        text << app_model.status_message

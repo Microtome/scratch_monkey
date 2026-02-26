@@ -145,24 +145,32 @@ docs: document overlay mode in README
 
 ### Key Commands
 
+**uv** is the package manager for this project (`~/.local/bin/uv`). Use it for all installs and running dev tools.
+
 ```bash
-# Install in dev mode
-pip install -e ".[dev]"
+# Install CLI only (dev mode)
+uv tool install --editable .
+
+# Install with GUI dependencies
+uv tool install --editable ".[gui]"
+
+# Reinstall (e.g. after adding a dep)
+uv tool install --editable ".[gui]" --force
 
 # Lint  (must be clean before any merge)
-python3 -m ruff check src tests
+uv run ruff check src tests
 
 # Format
-python3 -m ruff format src tests
+uv run ruff format src tests
 
-# Test  (all 135 must pass)
-python3 -m pytest tests/ -q
+# Test  (all tests must pass)
+uv run pytest
 
 # Test with short traceback
-python3 -m pytest tests/ -q --tb=short
+uv run pytest -q --tb=short
 ```
 
-> **Note**: `uv` is not installed on this machine. All dev commands use `python3 -m <tool>` directly. The `justfile` recipes mirror these commands.
+The `justfile` wraps these same commands — `just test`, `just lint`, `just fmt`, etc.
 
 ### Package Layout
 
