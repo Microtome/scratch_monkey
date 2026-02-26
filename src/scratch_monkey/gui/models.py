@@ -110,6 +110,9 @@ class AppModel(Atom):
     instances_dir = Str()
     instances = List(InstanceModel)
     selected_instance = Str("")
+    # selected is an observable Value member kept in sync with selected_instance.
+    # Using Value() (not @property) so Enaml bindings re-fire when it changes.
+    selected = Value()
     status_message = Str("")
     # PodmanRunner stored as Value so Atom allows non-member attributes
     _runner = Value()
@@ -120,14 +123,18 @@ class AppModel(Atom):
         self._runner = runner or PodmanRunner()
         self.refresh()
 
-    # ── queries ──────────────────────────────────────────────────────────────
+    # ── observers ─────────────────────────────────────────────────────────────
 
-    @property
-    def selected(self) -> InstanceModel | None:
-        for inst in self.instances:
-            if inst.name == self.selected_instance:
-                return inst
-        return None
+    def _observe_selected_instance(self, change: dict) -> None:
+        """Keep self.selected in sync when selected_instance changes."""
+        name = change["value"]
+        self.selected = next((i for i in self.instances if i.name == name), None)
+
+    def _observe_instances(self, change: dict) -> None:
+        """Re-resolve selected after the instance list is refreshed."""
+        self.selected = next((i for i in self.instances if i.name == self.selected_instance), None)
+
+    # ── actions ───────────────────────────────────────────────────────────────
 
     def refresh(self) -> None:
         """Reload all instances from disk."""
