@@ -7,7 +7,7 @@ import subprocess
 from pathlib import Path
 
 try:
-    from atom.api import Atom, Bool, List, Str, Value
+    from atom.api import Atom, Bool, List, Str, Value, observe
 except ImportError:
     raise ImportError(
         "The GUI requires the 'enaml' package. "
@@ -108,6 +108,9 @@ class InstanceModel(Atom):
     volume_entries = List(VolumeMountEntry)
     shared_entries = List(SharedVolumeEntry)
 
+    dirty = Bool(False)
+    _saved_config = Value()
+
     @classmethod
     def from_info(cls, info: InstanceInfo) -> InstanceModel:
         m = cls()
@@ -125,6 +128,7 @@ class InstanceModel(Atom):
         m.volumes = list(cfg.volumes)
         m.env_vars = list(cfg.env)
         m.volume_entries = [VolumeMountEntry.from_spec(v) for v in cfg.volumes]
+        m._saved_config = m.to_config()
         return m
 
     def to_config(self) -> InstanceConfig:
@@ -142,6 +146,30 @@ class InstanceModel(Atom):
             ],
             overlay=self.overlay,
         )
+
+    @observe('cmd', 'wayland', 'ssh', 'home', 'overlay', 'volume_entries', 'env_vars', 'shared_entries')
+    def _on_config_change(self, change):
+        if self._saved_config is not None:
+            self.dirty = (self.to_config() != self._saved_config)
+
+    def check_dirty(self):
+        """Recompute dirty flag. Call after in-place nested object mutations."""
+        if self._saved_config is not None:
+            self.dirty = (self.to_config() != self._saved_config)
+
+    def revert(self):
+        """Discard changes and restore to last saved config."""
+        if self._saved_config is not None:
+            cfg = self._saved_config
+            self.cmd = cfg.cmd
+            self.wayland = cfg.wayland
+            self.ssh = cfg.ssh
+            self.home = cfg.home
+            self.overlay = cfg.overlay
+            self.env_vars = list(cfg.env)
+            self.volume_entries = [VolumeMountEntry.from_spec(v) for v in cfg.volumes]
+            self.shared = list(cfg.shared)
+            self.dirty = False
 
     def add_volume_entry(self) -> None:
         """Append a new blank volume mount entry."""
@@ -169,6 +197,8 @@ class InstanceModel(Atom):
         """Persist the current model state to scratch.toml."""
         config_path = Path(self.directory) / "scratch.toml"
         save(config_path, self.to_config())
+        self._saved_config = self.to_config()
+        self.dirty = False
 
 
 class AppModel(Atom):
@@ -207,6 +237,10 @@ class AppModel(Atom):
             self.init_shared_entries(self.selected)
 
     # ── actions ───────────────────────────────────────────────────────────────
+
+    def has_unsaved_changes(self) -> bool:
+        """Check if any instance has unsaved config changes."""
+        return any(inst.dirty for inst in self.instances)
 
     def init_shared_entries(self, model: InstanceModel) -> None:
         """Build SharedVolumeEntry list from available shared + instance config."""

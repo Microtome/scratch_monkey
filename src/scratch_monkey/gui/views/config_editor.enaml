@@ -109,6 +109,7 @@ enamldef ConfigEditorPanel(Container): editor:
                         text ::
                             if editor.model and loop.item < len(editor.model.volume_entries):
                                 editor.model.volume_entries[loop.item].host_path = text
+                                editor.model.check_dirty()
                         placeholder = "Host path"
                         submit_triggers = ['lost_focus', 'return_pressed', 'auto_sync']
 
@@ -117,6 +118,7 @@ enamldef ConfigEditorPanel(Container): editor:
                         text ::
                             if editor.model and loop.item < len(editor.model.volume_entries):
                                 editor.model.volume_entries[loop.item].container_path = text
+                                editor.model.check_dirty()
                         placeholder = "Container path"
                         submit_triggers = ['lost_focus', 'return_pressed', 'auto_sync']
 
@@ -126,6 +128,7 @@ enamldef ConfigEditorPanel(Container): editor:
                         selected ::
                             if editor.model and loop.item < len(editor.model.volume_entries):
                                 editor.model.volume_entries[loop.item].mode = selected
+                                editor.model.check_dirty()
 
                     PushButton:
                         text = "X"
@@ -154,6 +157,7 @@ enamldef ConfigEditorPanel(Container): editor:
                                 entries = list(editor.model.env_vars)
                                 entries[loop.item] = text
                                 editor.model.env_vars = entries
+                                editor.model.check_dirty()
                         placeholder = "KEY=value"
                         submit_triggers = ['lost_focus', 'return_pressed', 'auto_sync']
 
@@ -192,6 +196,7 @@ enamldef ConfigEditorPanel(Container): editor:
                             toggled ::
                                 if editor.model and loop.item < len(editor.model.shared_entries):
                                     editor.model.shared_entries[loop.item].enabled = checked
+                                    editor.model.check_dirty()
 
                         ObjectCombo:
                             items = ["rw", "ro"]
@@ -199,6 +204,7 @@ enamldef ConfigEditorPanel(Container): editor:
                             selected ::
                                 if editor.model and loop.item < len(editor.model.shared_entries):
                                     editor.model.shared_entries[loop.item].mode = selected
+                                    editor.model.check_dirty()
                             enabled << (editor.model.shared_entries[loop.item].enabled if editor.model and loop.item < len(editor.model.shared_entries) else False)
 
             PushButton:
