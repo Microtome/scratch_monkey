@@ -1,15 +1,12 @@
 """Tests for scratch_monkey.instance module."""
 
-import shutil
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 import pytest
 
-from scratch_monkey.config import InstanceConfig
 from scratch_monkey.container import PodmanRunner
 from scratch_monkey.instance import (
-    Instance,
     InstanceError,
     clone,
     create,
@@ -17,7 +14,6 @@ from scratch_monkey.instance import (
     detect_base_image,
     is_fedora_based,
     list_all,
-    skel_copy,
 )
 
 
@@ -227,7 +223,7 @@ class TestSkelCopy:
         fake_skel = tmp_path / "fake_skel"
         fake_skel.mkdir()
         (fake_skel / ".bashrc").write_text("# skel")
-        with patch("scratch_monkey.instance.Path", wraps=Path) as mock_path_cls:
+        with patch("scratch_monkey.instance.Path", wraps=Path):
             # Override /etc/skel resolution
             original_Path = Path
 

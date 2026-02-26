@@ -8,7 +8,7 @@ from pathlib import Path
 
 import click
 
-from ..config import ConfigError, InstanceConfig, load, save
+from ..config import ConfigError
 from ..container import PodmanError, PodmanRunner
 from ..export import ExportError, export_command, unexport
 from ..instance import (
@@ -22,7 +22,8 @@ from ..instance import (
     list_all,
     skel_copy,
 )
-from ..overlay import ensure_running, exec_shell, reset as overlay_reset
+from ..overlay import ensure_running, exec_shell
+from ..overlay import reset as overlay_reset
 from ..shared import (
     SharedError,
     add_to_instance,
@@ -112,7 +113,7 @@ def clone_cmd(ctx: click.Context, source: str, dest: str) -> None:
     """Clone an existing instance (fresh home directory)."""
     instances_dir: Path = ctx.obj["instances_dir"]
     try:
-        inst = clone(source, dest, instances_dir)
+        clone(source, dest, instances_dir)
     except (InstanceError, ConfigError) as e:
         click.echo(f"Error: {e}", err=True)
         sys.exit(1)
@@ -155,7 +156,7 @@ def list_cmd(ctx: click.Context) -> None:
 
     instances = list_all(instances_dir, runner)
     if not instances:
-        click.echo(f"No instances found. Create one with: scratch-monkey create <name>")
+        click.echo("No instances found. Create one with: scratch-monkey create <name>")
         return
 
     click.echo(f"{'INSTANCE':<20} {'IMAGE':<8} {'OVERLAY':<10} {'DIRECTORY':<40} CONFIG")

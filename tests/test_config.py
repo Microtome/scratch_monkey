@@ -1,17 +1,16 @@
 """Tests for scratch_monkey.config module."""
 
+
 import pytest
-from pathlib import Path
 
 from scratch_monkey.config import (
     ConfigError,
     InstanceConfig,
+    _serialize,
     load,
     save,
     validate_name,
-    _serialize,
 )
-
 
 # ─── validate_name ────────────────────────────────────────────────────────────
 

@@ -1,8 +1,9 @@
 """Tests for scratch_monkey.container module."""
 
 import subprocess
+from unittest.mock import patch
+
 import pytest
-from unittest.mock import MagicMock, call, patch
 
 from scratch_monkey.container import PodmanError, PodmanRunner
 

@@ -1,8 +1,7 @@
 """Tests for scratch_monkey.overlay module."""
 
 import os
-from pathlib import Path
-from unittest.mock import MagicMock, call, patch
+from unittest.mock import MagicMock, patch
 
 import pytest
 
@@ -10,7 +9,6 @@ from scratch_monkey.config import InstanceConfig
 from scratch_monkey.container import PodmanError, PodmanRunner
 from scratch_monkey.instance import Instance
 from scratch_monkey.overlay import (
-    OverlayError,
     _overlay_name,
     _setup_fedora_user,
     ensure_running,

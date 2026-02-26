@@ -2,12 +2,11 @@
 
 from __future__ import annotations
 
-import os
 import shutil
 from dataclasses import dataclass
 from pathlib import Path
 
-from .config import InstanceConfig, ConfigError, load, save, validate_name
+from .config import InstanceConfig, load, save, validate_name
 from .container import PodmanRunner
 
 
@@ -25,7 +24,7 @@ class Instance:
     home_dir: Path
 
     @classmethod
-    def from_directory(cls, directory: Path) -> "Instance":
+    def from_directory(cls, directory: Path) -> Instance:
         """Load an Instance from an existing instance directory."""
         name = directory.name
         config = load(directory / "scratch.toml")

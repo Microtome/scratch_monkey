@@ -18,10 +18,9 @@ def main() -> None:
         )
         sys.exit(1)
 
-    from pathlib import Path
 
-    from .models import AppModel
     from ..container import PodmanRunner
+    from .models import AppModel
 
     instances_dir = Path.home() / "scratch-dev"
     runner = PodmanRunner()

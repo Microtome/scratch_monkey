@@ -3,45 +3,45 @@
 
 # Run tests
 test:
-    uv run pytest
+    python3 -m pytest
 
 # Run tests with coverage
 test-cov:
-    uv run pytest --cov=scratch_monkey --cov-report=term-missing
+    python3 -m pytest --cov=scratch_monkey --cov-report=term-missing
 
 # Run integration tests (requires real podman)
 test-integration:
-    uv run pytest -m integration
+    python3 -m pytest -m integration
 
 # Lint source and tests
 lint:
-    uv run ruff check src tests
+    python3 -m ruff check src tests
 
 # Format source and tests
 fmt:
-    uv run ruff format src tests
+    python3 -m ruff format src tests
 
 # Lint + format check (CI mode)
 check:
-    uv run ruff check src tests
-    uv run ruff format --check src tests
+    python3 -m ruff check src tests
+    python3 -m ruff format --check src tests
 
 # Install the tool in development mode
 install:
-    uv tool install --editable .
+    pip install -e ".[dev]"
 
 # Install with GUI dependencies
 install-gui:
-    uv tool install --editable ".[gui]"
+    pip install -e ".[gui,dev]"
 
 # Uninstall the tool
 uninstall:
-    uv tool uninstall scratch-monkey
+    pip uninstall scratch-monkey
 
 # Build distribution packages
 build:
-    uv build
+    python3 -m build
 
-# Show installed entry points
+# Show CLI help
 show:
-    uv run scratch-monkey --help
+    scratch-monkey --help

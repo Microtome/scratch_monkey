@@ -8,7 +8,6 @@ from scratch_monkey.config import InstanceConfig, load
 from scratch_monkey.instance import Instance
 from scratch_monkey.shared import (
     SharedError,
-    SharedVolumeInfo,
     add_to_instance,
     create_shared,
     delete_shared,

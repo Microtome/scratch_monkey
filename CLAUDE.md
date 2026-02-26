@@ -149,18 +149,20 @@ docs: document overlay mode in README
 # Install in dev mode
 pip install -e ".[dev]"
 
-# Lint
+# Lint  (must be clean before any merge)
 python3 -m ruff check src tests
 
 # Format
 python3 -m ruff format src tests
 
-# Test
+# Test  (all 135 must pass)
 python3 -m pytest tests/ -q
 
-# Test with coverage
+# Test with short traceback
 python3 -m pytest tests/ -q --tb=short
 ```
+
+> **Note**: `uv` is not installed on this machine. All dev commands use `python3 -m <tool>` directly. The `justfile` recipes mirror these commands.
 
 ### Package Layout
 

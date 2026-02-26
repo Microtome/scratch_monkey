@@ -24,7 +24,7 @@ scratch-monkey-gui = "scratch_monkey.gui.main:main"
 packages = ["src/scratch_monkey"]
 
 [tool.ruff]
-line-length = 88
+line-length = 120
 target-version = "py311"
 
 [tool.ruff.lint]

@@ -5,14 +5,14 @@ from __future__ import annotations
 from pathlib import Path
 
 try:
-    from atom.api import Atom, Bool, List, Str, observe
+    from atom.api import Atom, Bool, List, Str
 except ImportError:
     raise ImportError(
         "The GUI requires the 'enaml' package. "
         "Install it with: pip install 'scratch-monkey[gui]'"
     )
 
-from ..config import InstanceConfig, load, save
+from ..config import InstanceConfig, save
 from ..container import PodmanRunner
 from ..instance import InstanceInfo, list_all
 
@@ -36,7 +36,7 @@ class InstanceModel(Atom):
     env_vars = List(str)
 
     @classmethod
-    def from_info(cls, info: InstanceInfo) -> "InstanceModel":
+    def from_info(cls, info: InstanceInfo) -> InstanceModel:
         m = cls()
         m.name = info.name
         m.directory = str(info.directory)
@@ -87,7 +87,6 @@ class AppModel(Atom):
 
     def refresh(self) -> None:
         """Reload all instances from disk."""
-        from ..instance import list_all
 
         instances_dir = Path(self.instances_dir)
         try:

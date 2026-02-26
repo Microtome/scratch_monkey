@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import os
-from dataclasses import dataclass
 
 from .container import PodmanError, PodmanRunner
 from .instance import Instance, is_fedora_based

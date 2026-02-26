@@ -1,14 +1,11 @@
 """Tests for scratch_monkey.export module."""
 
-import os
 import stat
-from pathlib import Path
-from unittest.mock import patch
 
 import pytest
 
 from scratch_monkey.config import InstanceConfig
-from scratch_monkey.export import ExportError, _EXPORT_MAGIC, export_command, unexport
+from scratch_monkey.export import _EXPORT_MAGIC, ExportError, export_command, unexport
 from scratch_monkey.instance import Instance
 
 
