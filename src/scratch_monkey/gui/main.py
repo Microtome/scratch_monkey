@@ -22,7 +22,7 @@ def main() -> None:
     from ..container import PodmanRunner
     from .models import AppModel
 
-    instances_dir = Path.home() / "scratch-dev"
+    instances_dir = Path.home() / "scratch-monkey"
     runner = PodmanRunner()
     app_model = AppModel(instances_dir, runner)
 

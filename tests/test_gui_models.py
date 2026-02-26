@@ -109,7 +109,7 @@ class TestAppModelSharedEntries:
     def test_init_shared_entries_marks_enabled(self, tmp_path):
         """init_shared_entries should mark instance's shared volumes as enabled."""
         # Set up instances dir with a shared volume
-        instances_dir = tmp_path / "scratch-dev"
+        instances_dir = tmp_path / "scratch-monkey"
         instances_dir.mkdir()
         shared_dir = instances_dir / ".shared"
         shared_dir.mkdir()
@@ -137,7 +137,7 @@ class TestAppModelSharedEntries:
         assert data.enabled is False
 
     def test_init_shared_entries_parses_mode(self, tmp_path):
-        instances_dir = tmp_path / "scratch-dev"
+        instances_dir = tmp_path / "scratch-monkey"
         instances_dir.mkdir()
         shared_dir = instances_dir / ".shared"
         shared_dir.mkdir()
@@ -186,7 +186,7 @@ class TestGUISmoke:
         runner.container_running.return_value = False
         runner.image_exists.return_value = False
 
-        instances_dir = tmp_path / "scratch-dev"
+        instances_dir = tmp_path / "scratch-monkey"
         instances_dir.mkdir()
         app = AppModel(instances_dir=instances_dir, runner=runner)
         assert app.instances == []

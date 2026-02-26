@@ -27,7 +27,7 @@ def mock_runner():
 
 @pytest.fixture
 def instances_dir(tmp_path):
-    d = tmp_path / "scratch-dev"
+    d = tmp_path / "scratch-monkey"
     d.mkdir()
     return d
 

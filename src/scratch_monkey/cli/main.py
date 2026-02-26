@@ -34,7 +34,7 @@ from ..shared import (
     remove_from_instance,
 )
 
-DEFAULT_INSTANCES_DIR = Path.home() / "scratch-dev"
+DEFAULT_INSTANCES_DIR = Path.home() / "scratch-monkey"
 DEFAULT_BASE_IMAGE = "scratch_dev"
 FEDORA_IMAGE = "scratch_dev_fedora"
 
@@ -45,7 +45,7 @@ _PROJECT_DIR = Path(__file__).parent.parent.parent.parent
 @click.group()
 @click.option(
     "--instances-dir",
-    envvar="SCRATCH_INSTANCES_DIR",
+    envvar="SCRATCH_MONKEY_INSTANCES_DIR",
     default=str(DEFAULT_INSTANCES_DIR),
     show_default=True,
     help="Directory where instances are stored.",
@@ -288,7 +288,7 @@ def run(
     ssh: bool,
     cmd: str,
 ) -> None:
-    """Run a scratch-dev instance."""
+    """Run a scratch-monkey instance."""
     instances_dir: Path = ctx.obj["instances_dir"]
     runner: PodmanRunner = ctx.obj["runner"]
     inst = _get_instance(instances_dir, name)

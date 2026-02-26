@@ -27,7 +27,7 @@ def mock_runner() -> MagicMock:
 @pytest.fixture
 def instances_dir(tmp_path: Path) -> Path:
     """A temporary instances directory."""
-    d = tmp_path / "scratch-dev"
+    d = tmp_path / "scratch-monkey"
     d.mkdir()
     return d
 

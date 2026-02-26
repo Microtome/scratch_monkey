@@ -61,7 +61,7 @@ scratch-monkey edit <name> --file dockerfile
 scratch-monkey edit <name> --file env
 ```
 
-Each instance lives at `$HOME/scratch-dev/<name>/`:
+Each instance lives at `$HOME/scratch-monkey/<name>/`:
 
 ```
 myproject/
@@ -145,7 +145,7 @@ scratch-monkey reset myproject        # wipe the overlay container (prompts)
 
 ## Shared volumes
 
-Shared volumes let multiple instances share a host directory, useful for IPC via files, sockets, FIFOs, or databases. They live at `$HOME/scratch-dev/.shared/<name>/` and are mounted at `/shared/<name>` inside each container.
+Shared volumes let multiple instances share a host directory, useful for IPC via files, sockets, FIFOs, or databases. They live at `$HOME/scratch-monkey/.shared/<name>/` and are mounted at `/shared/<name>` inside each container.
 
 ```bash
 scratch-monkey share create comms         # create the shared volume
@@ -280,7 +280,7 @@ Fedora instances use their own filesystem — no host system mounts.
 Global options (before the command):
 
 ```
---instances-dir TEXT   Default: ~/scratch-dev
+--instances-dir TEXT   Default: ~/scratch-monkey
 --base-image TEXT      Default: scratch_dev
 ```
 
