@@ -157,3 +157,47 @@ class TestAppModelSharedEntries:
         comms = next(e for e in m.shared_entries if e.name == "comms")
         assert comms.enabled is True
         assert comms.mode == "ro"
+
+
+class TestGUISmoke:
+    """Smoke tests to verify the GUI import chain works."""
+
+    def test_gui_main_module_imports(self):
+        """Verify scratch_monkey.gui.main can be imported."""
+        from scratch_monkey.gui import main  # noqa: F401
+
+    def test_models_import_chain(self):
+        """Verify all model classes are importable."""
+        from scratch_monkey.gui.models import (  # noqa: F401
+            AppModel,
+            InstanceModel,
+            SharedVolumeEntry,
+            VolumeMountEntry,
+        )
+
+    def test_app_model_creates_with_empty_dir(self, tmp_path):
+        """Verify AppModel can be created with an empty instances dir."""
+        from unittest.mock import MagicMock
+
+        from scratch_monkey.gui.models import AppModel
+
+        runner = MagicMock()
+        runner.container_exists.return_value = False
+        runner.container_running.return_value = False
+        runner.image_exists.return_value = False
+
+        instances_dir = tmp_path / "scratch-dev"
+        instances_dir.mkdir()
+        app = AppModel(instances_dir=instances_dir, runner=runner)
+        assert app.instances == []
+        assert app.status_message.startswith("Loaded")
+
+    def test_enaml_views_compile(self):
+        """Verify all enaml view files compile without errors."""
+        import enaml
+        with enaml.imports():
+            from scratch_monkey.gui.views import (
+                instance_detail,  # noqa: F401
+                instance_list,  # noqa: F401
+                main_window,  # noqa: F401
+            )
