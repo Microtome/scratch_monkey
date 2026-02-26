@@ -1,0 +1,120 @@
+"""Export/unexport commands from scratch-monkey instances to ~/.local/bin."""
+
+from __future__ import annotations
+
+import os
+import stat
+from pathlib import Path
+from string import Template
+
+from .instance import Instance
+
+
+class ExportError(Exception):
+    """Raised for export/unexport errors."""
+
+
+_EXPORT_MAGIC = "# scratch-monkey export"
+
+_SCRIPT_TEMPLATE = Template(
+    """\
+#!/bin/sh
+# scratch-monkey export
+# instance: ${instance_name}
+# command: ${cmd}
+if [ "$${SCRATCH_INSTANCE:-}" = "${instance_name}" ]; then
+    exec ${cmd} "$$@"
+fi
+if podman container inspect "${overlay_name}" --format '{{.State.Status}}' 2>/dev/null | grep -q '^running$$'; then
+    if [ -t 1 ]; then
+        exec podman exec -it "${overlay_name}" ${cmd} "$$@"
+    else
+        exec podman exec -i "${overlay_name}" ${cmd} "$$@"
+    fi
+fi
+if podman image exists "${instance_name}" 2>/dev/null; then
+    _image="${instance_name}"
+else
+    _image="${base_image}"
+fi
+if [ -t 1 ]; then _tty="-t"; else _tty=""; fi
+exec podman run --rm -i $$_tty \\
+    --security-opt label=disable \\
+    --network=host \\
+    --hostname "${hostname}" \\
+    -e HOME="${container_home}" \\
+    -e USER="${username}" \\
+    -e SCRATCH_INSTANCE="${instance_name}" \\
+    -v "${home_dir}:${container_home}" \\
+    "$$_image" ${cmd} "$$@"
+"""
+)
+
+
+def export_command(
+    instance: Instance,
+    cmd: str,
+    bin_name: str = "",
+    base_image: str = "scratch_dev",
+    bin_dir: Path | None = None,
+) -> Path:
+    """Generate a wrapper script for a command in an instance.
+
+    The script is placed in bin_dir (default: ~/.local/bin).
+    Returns the path of the created script.
+    """
+    if not bin_name:
+        bin_name = Path(cmd).name
+
+    if bin_dir is None:
+        bin_dir = Path.home() / ".local" / "bin"
+    bin_dir = Path(bin_dir)
+    bin_dir.mkdir(parents=True, exist_ok=True)
+
+    out_path = bin_dir / bin_name
+    username = os.environ.get("USER", "user")
+    container_home = f"/home/{username}"
+    hostname = f"{instance.name}.{_short_hostname()}"
+
+    content = _SCRIPT_TEMPLATE.substitute(
+        instance_name=instance.name,
+        overlay_name=f"{instance.name}-overlay",
+        cmd=cmd,
+        base_image=base_image,
+        hostname=hostname,
+        container_home=container_home,
+        username=username,
+        home_dir=str(instance.home_dir),
+    )
+
+    out_path.write_text(content)
+    out_path.chmod(out_path.stat().st_mode | stat.S_IEXEC | stat.S_IXGRP | stat.S_IXOTH)
+    return out_path
+
+
+def unexport(bin_name: str, bin_dir: Path | None = None) -> None:
+    """Remove an exported command from ~/.local/bin.
+
+    Validates the magic comment before removing to avoid deleting arbitrary files.
+    Raises ExportError if the file is missing or not a scratch-monkey export.
+    """
+    if bin_dir is None:
+        bin_dir = Path.home() / ".local" / "bin"
+    bin_dir = Path(bin_dir)
+    out_path = bin_dir / bin_name
+
+    if not out_path.exists():
+        raise ExportError(f"No file found at {out_path}")
+
+    content = out_path.read_text()
+    if _EXPORT_MAGIC not in content:
+        raise ExportError(
+            f"{out_path} does not look like a scratch-monkey export, not removing."
+        )
+
+    out_path.unlink()
+
+
+def _short_hostname() -> str:
+    import socket
+    return socket.gethostname().split(".")[0]

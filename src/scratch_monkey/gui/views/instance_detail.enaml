@@ -1,0 +1,101 @@
+"""Instance detail panel for scratch-monkey GUI."""
+
+from enaml.widgets.api import (
+    Container, Label, PushButton, GroupBox, HGroup, VGroup,
+    CheckBox, Field
+)
+from enaml.layout.api import vbox, hbox, spacer
+from enaml.core.api import Conditional
+
+
+enamldef InstanceDetailPanel(Container): panel:
+    """Detail view for a selected instance with config editor and action buttons."""
+    attr app_model
+
+    Conditional:
+        condition << app_model.selected is None
+
+        Label:
+            text = "Select an instance from the list."
+
+    Conditional:
+        condition << app_model.selected is not None
+
+        VGroup: detail:
+            attr inst << app_model.selected
+
+            Label:
+                text << f"Instance: {inst.name if inst else ''}"
+                font = "bold 14px"
+
+            Label:
+                text << f"Directory: {inst.directory if inst else ''}"
+
+            GroupBox:
+                title = "Configuration"
+
+                VGroup:
+                    HGroup:
+                        Label:
+                            text = "Command:"
+                        Field:
+                            text << (inst.cmd if inst else "")
+                            text ::
+                                if inst:
+                                    inst.cmd = text
+
+                    CheckBox:
+                        text = "Wayland"
+                        checked << (inst.wayland if inst else False)
+                        toggled ::
+                            if inst:
+                                inst.wayland = checked
+
+                    CheckBox:
+                        text = "SSH Agent"
+                        checked << (inst.ssh if inst else False)
+                        toggled ::
+                            if inst:
+                                inst.ssh = checked
+
+                    CheckBox:
+                        text = "Overlay mode"
+                        checked << (inst.overlay if inst else False)
+                        toggled ::
+                            if inst:
+                                inst.overlay = checked
+
+                    PushButton:
+                        text = "Save Config"
+                        clicked ::
+                            if inst:
+                                inst.save()
+
+            GroupBox:
+                title = "Actions"
+
+                HGroup:
+                    PushButton:
+                        text = "Enter"
+                        clicked ::
+                            pass  # TODO: launch terminal
+
+                    PushButton:
+                        text = "Enter as Root"
+                        clicked ::
+                            pass  # TODO: launch terminal as root
+
+                    PushButton:
+                        text = "Build"
+                        clicked ::
+                            pass  # TODO: build instance image
+
+                    PushButton:
+                        text = "Reset Overlay"
+                        clicked ::
+                            pass  # TODO: reset overlay container
+
+                    PushButton:
+                        text = "Delete"
+                        clicked ::
+                            pass  # TODO: confirm and delete

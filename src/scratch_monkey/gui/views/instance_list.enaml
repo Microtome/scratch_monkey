@@ -1,0 +1,27 @@
+"""Instance list panel for scratch-monkey GUI."""
+
+from enaml.widgets.api import Container, Label, PushButton, ScrollArea, VGroup
+from enaml.layout.api import vbox, hbox, spacer
+from enaml.core.api import Looper
+
+
+enamldef InstanceListPanel(Container): panel:
+    """Scrollable list of instances with status indicators."""
+    attr app_model
+
+    ScrollArea:
+        Container:
+            Looper:
+                iterable << app_model.instances
+                Container:
+                    attr inst = loop_item
+                    padding = (4, 4, 4, 4)
+
+                    PushButton:
+                        text << (
+                            f"{'[running]' if inst.overlay_running else '[built]' if inst.image_built else '[no image]'}"
+                            f"  {inst.name}"
+                        )
+                        flat = True
+                        clicked ::
+                            app_model.selected_instance = inst.name

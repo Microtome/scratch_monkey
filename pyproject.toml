@@ -1,0 +1,37 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "scratch-monkey"
+version = "0.1.0"
+description = "Podman-based dev container manager"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+    "click>=8.0",
+]
+
+[project.optional-dependencies]
+gui = ["enaml[qt6-pyqt]>=0.19"]
+dev = ["pytest", "pytest-mock", "ruff"]
+
+[project.scripts]
+scratch-monkey     = "scratch_monkey.cli.main:cli"
+scratch-monkey-gui = "scratch_monkey.gui.main:main"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/scratch_monkey"]
+
+[tool.ruff]
+line-length = 88
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+markers = [
+    "integration: marks tests as integration tests (deselect with '-m \"not integration\"')",
+]
