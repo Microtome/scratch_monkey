@@ -22,7 +22,7 @@ from ..instance import (
     list_all,
     skel_copy,
 )
-from ..overlay import ensure_running, exec_shell
+from ..overlay import _gpu_devices, ensure_running, exec_shell
 from ..overlay import reset as overlay_reset
 from ..shared import (
     SharedError,
@@ -461,6 +461,15 @@ def _run_instance(
     # Extra env vars
     for var in cfg.env:
         podman_args += ["-e", var]
+
+    # GPU passthrough
+    if cfg.gpu:
+        for dev in _gpu_devices():
+            podman_args += ["--device", dev]
+
+    # Extra devices
+    for dev in cfg.devices:
+        podman_args += ["--device", dev]
 
     podman_args.append(run_image)
     podman_args.append(cfg.cmd)

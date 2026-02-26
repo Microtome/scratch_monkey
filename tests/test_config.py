@@ -134,6 +134,20 @@ class TestLoad:
         assert cfg.shared == ["comms"]
         assert cfg.overlay is True
 
+    def test_load_gpu_and_devices(self, tmp_path):
+        toml = tmp_path / "scratch.toml"
+        toml.write_text('gpu = true\ndevices = ["/dev/dri"]\n')
+        cfg = load(toml)
+        assert cfg.gpu is True
+        assert cfg.devices == ["/dev/dri"]
+
+    def test_default_gpu_false(self, tmp_path):
+        toml = tmp_path / "scratch.toml"
+        toml.write_text("")
+        cfg = load(toml)
+        assert cfg.gpu is False
+        assert cfg.devices == []
+
 
 # ─── save ─────────────────────────────────────────────────────────────────────
 
@@ -161,6 +175,14 @@ class TestSave:
         save(path, cfg)
         loaded = load(path)
         assert loaded == cfg
+
+    def test_save_gpu_and_devices(self, tmp_path):
+        path = tmp_path / "scratch.toml"
+        cfg = InstanceConfig(gpu=True, devices=["/dev/dri", "/dev/kfd"])
+        save(path, cfg)
+        loaded = load(path)
+        assert loaded.gpu is True
+        assert loaded.devices == ["/dev/dri", "/dev/kfd"]
 
     def test_atomic_write_creates_file(self, tmp_path):
         path = tmp_path / "scratch.toml"
@@ -196,6 +218,8 @@ class TestSerialize:
         assert "env" in text
         assert "shared" in text
         assert "overlay" in text
+        assert "gpu" in text
+        assert "devices" in text
 
     def test_bool_lowercase(self):
         text = _serialize(InstanceConfig(wayland=True, overlay=False))
