@@ -92,6 +92,13 @@ class TestDeleteShared:
         assert "comms" not in cfg.shared
         assert "data" in cfg.shared
 
+    def test_removes_ro_entries_from_instance_configs(self, instances_dir):
+        create_shared("comms", instances_dir)
+        inst = make_instance(instances_dir, "alpha", shared=["comms:ro"])
+        delete_shared("comms", instances_dir)
+        cfg = load(inst.directory / "scratch.toml")
+        assert not any("comms" in s for s in cfg.shared)
+
 
 # ─── add_to_instance ──────────────────────────────────────────────────────────
 
@@ -122,6 +129,13 @@ class TestAddToInstance:
         add_to_instance("comms", inst, instances_dir)
         assert "comms" in inst.config.shared
 
+    def test_idempotent_when_already_present_with_mode(self, instances_dir):
+        create_shared("comms", instances_dir)
+        inst = make_instance(instances_dir, "alpha", shared=["comms:ro"])
+        add_to_instance("comms", inst, instances_dir)
+        cfg = load(inst.directory / "scratch.toml")
+        assert sum(1 for s in cfg.shared if "comms" in s) == 1
+
 
 # ─── remove_from_instance ─────────────────────────────────────────────────────
 
@@ -151,6 +165,13 @@ class TestRemoveFromInstance:
         inst = make_instance(instances_dir, "alpha", shared=["comms"])
         remove_from_instance("comms", inst)
         assert "comms" not in inst.config.shared
+
+    def test_removes_volume_with_mode_suffix(self, instances_dir):
+        inst = make_instance(instances_dir, "alpha", shared=["comms:ro"])
+        result = remove_from_instance("comms", inst)
+        assert result is True
+        cfg = load(inst.directory / "scratch.toml")
+        assert not any("comms" in s for s in cfg.shared)
 
 
 # ─── list_shared ──────────────────────────────────────────────────────────────
@@ -185,6 +206,13 @@ class TestListShared:
         result = list_shared(instances_dir)
         data_info = result[0]
         assert data_info.used_by == []
+
+    def test_counts_ro_entries_in_used_by(self, instances_dir):
+        create_shared("comms", instances_dir)
+        make_instance(instances_dir, "alpha", shared=["comms:ro"])
+        result = list_shared(instances_dir)
+        comms_info = next(v for v in result if v.name == "comms")
+        assert "alpha" in comms_info.used_by
 
 
 # ─── parse_shared_entry ───────────────────────────────────────────────────────

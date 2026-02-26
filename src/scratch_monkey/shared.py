@@ -68,8 +68,8 @@ def delete_shared(name: str, instances_dir: Path) -> None:
         if not config_path.exists():
             continue
         cfg = load(config_path)
-        if name in cfg.shared:
-            cfg.shared = [v for v in cfg.shared if v != name]
+        if any(parse_shared_entry(v)[0] == name for v in cfg.shared):
+            cfg.shared = [v for v in cfg.shared if parse_shared_entry(v)[0] != name]
             save(config_path, cfg)
 
     shutil.rmtree(vol_dir)
@@ -91,7 +91,8 @@ def add_to_instance(vol_name: str, instance: Instance, instances_dir: Path) -> N
 
     config_path = instance.directory / "scratch.toml"
     cfg = load(config_path)
-    if vol_name in cfg.shared:
+    existing_names = [parse_shared_entry(s)[0] for s in cfg.shared]
+    if vol_name in existing_names:
         return  # already present
     cfg.shared = [*cfg.shared, vol_name]
     save(config_path, cfg)
@@ -105,9 +106,10 @@ def remove_from_instance(vol_name: str, instance: Instance) -> bool:
     """
     config_path = instance.directory / "scratch.toml"
     cfg = load(config_path)
-    if vol_name not in cfg.shared:
+    existing_names = [parse_shared_entry(s)[0] for s in cfg.shared]
+    if vol_name not in existing_names:
         return False
-    cfg.shared = [v for v in cfg.shared if v != vol_name]
+    cfg.shared = [v for v in cfg.shared if parse_shared_entry(v)[0] != vol_name]
     save(config_path, cfg)
     instance.config = cfg
     return True
@@ -143,9 +145,10 @@ def list_shared(instances_dir: Path) -> list[SharedVolumeInfo]:
         if not config_path.exists():
             continue
         cfg = load(config_path)
-        for vol_name in cfg.shared:
-            if vol_name in volume_users:
-                volume_users[vol_name].append(entry.name)
+        for shared_entry in cfg.shared:
+            bare_name, _ = parse_shared_entry(shared_entry)
+            if bare_name in volume_users:
+                volume_users[bare_name].append(entry.name)
 
     return [
         SharedVolumeInfo(
