@@ -1,7 +1,7 @@
 """Instance detail panel for scratch-monkey GUI."""
 
 from enaml.widgets.api import (
-    Container, Label, PushButton, GroupBox, VGroup, HGroup
+    Container, Label, PushButton, GroupBox, VGroup, HGroup, ScrollArea
 )
 from enaml.core.api import Conditional
 
@@ -20,46 +20,48 @@ enamldef InstanceDetailPanel(Container): panel:
     Conditional:
         condition << app_model.selected_instance != ""
 
-        VGroup:
-            Label:
-                text << f"Instance: {app_model.selected_instance}"
+        ScrollArea:
+            Container:
+                VGroup:
+                    Label:
+                        text << f"Instance: {app_model.selected_instance}"
 
-            ConfigEditorPanel:
-                model << app_model.selected
-                available_shared << app_model.available_shared
-
-            PushButton:
-                text = "Save Config"
-                clicked ::
-                    if app_model.selected:
-                        app_model.selected.save()
-                        app_model.status_message = f"Saved config for '{app_model.selected_instance}'"
-
-            GroupBox:
-                title = "Actions"
-
-                HGroup:
-                    PushButton:
-                        text = "Enter"
-                        clicked ::
-                            app_model.enter_instance(app_model.selected_instance)
+                    ConfigEditorPanel:
+                        model << app_model.selected
+                        available_shared << app_model.available_shared
 
                     PushButton:
-                        text = "Enter as Root"
+                        text = "Save Config"
                         clicked ::
-                            app_model.enter_instance(app_model.selected_instance, root=True)
+                            if app_model.selected:
+                                app_model.selected.save()
+                                app_model.status_message = f"Saved config for '{app_model.selected_instance}'"
 
-                    PushButton:
-                        text = "Build"
-                        clicked ::
-                            app_model.build_instance(app_model.selected_instance)
+                    GroupBox:
+                        title = "Actions"
 
-                    PushButton:
-                        text = "Reset Overlay"
-                        clicked ::
-                            app_model.reset_overlay(app_model.selected_instance)
+                        HGroup:
+                            PushButton:
+                                text = "Enter"
+                                clicked ::
+                                    app_model.enter_instance(app_model.selected_instance)
 
-                    PushButton:
-                        text = "Delete"
-                        clicked ::
-                            app_model.delete_instance(app_model.selected_instance)
+                            PushButton:
+                                text = "Enter as Root"
+                                clicked ::
+                                    app_model.enter_instance(app_model.selected_instance, root=True)
+
+                            PushButton:
+                                text = "Build"
+                                clicked ::
+                                    app_model.build_instance(app_model.selected_instance)
+
+                            PushButton:
+                                text = "Reset Overlay"
+                                clicked ::
+                                    app_model.reset_overlay(app_model.selected_instance)
+
+                            PushButton:
+                                text = "Delete"
+                                clicked ::
+                                    app_model.delete_instance(app_model.selected_instance)
