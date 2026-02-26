@@ -8,7 +8,7 @@ from pathlib import Path
 
 import click
 
-from ..config import ConfigError
+from ..config import DEFAULT_INSTANCES_DIR, ConfigError
 from ..container import PodmanError, PodmanRunner
 from ..export import ExportError, export_command, unexport
 from ..instance import (
@@ -34,7 +34,6 @@ from ..shared import (
     remove_from_instance,
 )
 
-DEFAULT_INSTANCES_DIR = Path.home() / "scratch-monkey"
 DEFAULT_BASE_IMAGE = "scratch_dev"
 FEDORA_IMAGE = "scratch_dev_fedora"
 
