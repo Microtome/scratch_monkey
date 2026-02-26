@@ -9,6 +9,9 @@ import tomllib
 from dataclasses import dataclass, field
 from pathlib import Path
 
+# Default location for instance directories
+DEFAULT_INSTANCES_DIR: Path = Path.home() / "scratch-monkey"
+
 # Valid instance name: starts with alphanum, then alphanum/underscore/dot/dash
 _NAME_RE = re.compile(r"^[a-zA-Z0-9][a-zA-Z0-9_.\-]*$")
 

@@ -7,13 +7,15 @@ from pathlib import Path
 
 import click
 
-DEFAULT_INSTANCES_DIR = Path.home() / "scratch-monkey"
+from ..config import DEFAULT_INSTANCES_DIR
 
 
 def launch(instances_dir: Path) -> None:
     """Launch the GUI application. Called by both entry points."""
     try:
         import enaml
+
+        from .models import AppModel
     except ImportError:
         click.echo(
             "Error: GUI dependencies not installed.\n"
@@ -23,7 +25,6 @@ def launch(instances_dir: Path) -> None:
         sys.exit(1)
 
     from ..container import PodmanRunner
-    from .models import AppModel
 
     runner = PodmanRunner()
     app_model = AppModel(instances_dir, runner)
@@ -45,6 +46,7 @@ def launch(instances_dir: Path) -> None:
     envvar="SCRATCH_MONKEY_INSTANCES_DIR",
     default=str(DEFAULT_INSTANCES_DIR),
     show_default=True,
+    show_envvar=True,
     help="Directory where instances are stored.",
 )
 def gui_cli(instances_dir: str) -> None:

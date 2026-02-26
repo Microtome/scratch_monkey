@@ -6,6 +6,7 @@ import sys
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
+import pytest
 from click.testing import CliRunner
 
 from scratch_monkey.cli.main import cli
@@ -119,3 +120,60 @@ class TestGuiCliStandalone:
         assert result.exit_code == 0
         assert "Usage:" in result.output
         assert "--instances-dir" in result.output
+
+    def test_gui_cli_help_shows_envvar(self):
+        """gui_cli --help displays the env var name due to show_envvar=True."""
+        runner = CliRunner()
+        # Use a wide terminal so the env var name is not line-wrapped mid-word
+        result = runner.invoke(gui_cli, ["--help"], terminal_width=200)
+        assert result.exit_code == 0
+        assert "SCRATCH_MONKEY_INSTANCES_DIR" in result.output
+
+
+class TestGuiCommandInheritsEnvVar:
+    """Tests for env var inheritance through the parent CLI group."""
+
+    def test_gui_respects_env_var_via_parent_group(self, tmp_path):
+        """gui subcommand inherits SCRATCH_MONKEY_INSTANCES_DIR from parent group."""
+        runner = CliRunner()
+        mock_launch = MagicMock()
+        env_dir = str(tmp_path / "env-instances")
+        with patch("scratch_monkey.gui.main.launch", mock_launch):
+            result = runner.invoke(
+                cli, ["gui"], env={"SCRATCH_MONKEY_INSTANCES_DIR": env_dir}
+            )
+        assert result.exit_code == 0
+        mock_launch.assert_called_once()
+        call_kwargs = mock_launch.call_args
+        passed_dir = call_kwargs.kwargs.get("instances_dir") or call_kwargs.args[0]
+        assert passed_dir == Path(env_dir)
+
+    def test_gui_help(self):
+        """scratch-monkey gui --help shows usage."""
+        runner = CliRunner()
+        result = runner.invoke(cli, ["gui", "--help"])
+        assert result.exit_code == 0
+        assert "Launch the scratch-monkey GUI" in result.output
+
+
+class TestLaunchImportGuard:
+    """Tests for launch() import guard behavior."""
+
+    def test_launch_exits_on_missing_enaml(self):
+        """launch() exits with code 1 and friendly message when enaml is not installed."""
+        import builtins
+
+        real_import = builtins.__import__
+
+        def mock_import(name, *args, **kwargs):
+            if name == "enaml":
+                raise ImportError("No module named 'enaml'")
+            return real_import(name, *args, **kwargs)
+
+        with patch("builtins.__import__", side_effect=mock_import):
+            with pytest.raises(SystemExit) as exc_info:
+                from scratch_monkey.gui import main as gui_main
+
+                # Force re-execution of the function body with the patched import
+                gui_main.launch(Path("/tmp/test"))
+        assert exc_info.value.code == 1
