@@ -511,7 +511,7 @@ def unexport_cmd(bin: str) -> None:
 def gui(ctx: click.Context) -> None:
     """Launch the scratch-monkey GUI."""
     try:
-        from ..gui.main import main as gui_main
+        from ..gui.main import launch as gui_launch
     except ImportError:
         click.echo(
             "Error: GUI dependencies not installed.\n"
@@ -519,7 +519,7 @@ def gui(ctx: click.Context) -> None:
             err=True,
         )
         sys.exit(1)
-    gui_main(instances_dir=ctx.obj["instances_dir"])
+    gui_launch(instances_dir=ctx.obj["instances_dir"])
 
 
 # ─── Shared volumes ───────────────────────────────────────────────────────────

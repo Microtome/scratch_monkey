@@ -9,31 +9,32 @@ from unittest.mock import MagicMock, patch
 from click.testing import CliRunner
 
 from scratch_monkey.cli.main import cli
+from scratch_monkey.gui.main import gui_cli
 
 
 class TestGuiCommand:
-    def test_gui_calls_main_with_default_instances_dir(self):
-        """gui command calls gui_main with the default instances_dir."""
+    def test_gui_calls_launch_with_default_instances_dir(self):
+        """gui command calls launch with the default instances_dir."""
         runner = CliRunner()
-        mock_gui_main = MagicMock()
-        with patch("scratch_monkey.gui.main.main", mock_gui_main):
+        mock_launch = MagicMock()
+        with patch("scratch_monkey.gui.main.launch", mock_launch):
             result = runner.invoke(cli, ["gui"])
         assert result.exit_code == 0
-        mock_gui_main.assert_called_once()
-        call_kwargs = mock_gui_main.call_args
+        mock_launch.assert_called_once()
+        call_kwargs = mock_launch.call_args
         passed_dir = call_kwargs.kwargs.get("instances_dir") or call_kwargs.args[0]
         assert passed_dir == Path.home() / "scratch-monkey"
 
     def test_gui_passes_custom_instances_dir(self, tmp_path):
-        """gui command passes --instances-dir override to gui_main."""
+        """gui command passes --instances-dir override to launch."""
         runner = CliRunner()
-        mock_gui_main = MagicMock()
+        mock_launch = MagicMock()
         custom_dir = str(tmp_path / "my-instances")
-        with patch("scratch_monkey.gui.main.main", mock_gui_main):
+        with patch("scratch_monkey.gui.main.launch", mock_launch):
             result = runner.invoke(cli, ["--instances-dir", custom_dir, "gui"])
         assert result.exit_code == 0
-        mock_gui_main.assert_called_once()
-        call_kwargs = mock_gui_main.call_args
+        mock_launch.assert_called_once()
+        call_kwargs = mock_launch.call_args
         passed_dir = call_kwargs.kwargs.get("instances_dir") or call_kwargs.args[0]
         assert passed_dir == Path(custom_dir)
 
@@ -62,86 +63,59 @@ class TestGuiCommand:
         assert "GUI dependencies not installed" in result.output
 
 
-class TestGuiMainStandaloneEnv:
-    """Tests for gui/main.py:main() respecting SCRATCH_MONKEY_INSTANCES_DIR env var."""
+class TestGuiCliStandalone:
+    """Tests for gui/main.py:gui_cli() Click command."""
 
-    def test_main_respects_env_var_when_no_arg(self, monkeypatch, tmp_path):
-        """gui main() uses SCRATCH_MONKEY_INSTANCES_DIR env var when instances_dir is None."""
-        env_dir = str(tmp_path / "env-instances")
-        monkeypatch.setenv("SCRATCH_MONKEY_INSTANCES_DIR", env_dir)
+    def test_gui_cli_default_instances_dir(self):
+        """gui_cli uses the default instances dir when no option or env var given."""
+        runner = CliRunner()
+        mock_launch = MagicMock()
+        with patch("scratch_monkey.gui.main.launch", mock_launch):
+            result = runner.invoke(gui_cli, [])
+        assert result.exit_code == 0
+        mock_launch.assert_called_once_with(Path.home() / "scratch-monkey")
 
-        # Mock AppModel to exit early and prevent actual GUI launch
-        def mock_app_model_factory(*args, **kwargs):
-            # Record the call and raise to prevent further execution
-            raise RuntimeError("stop_execution_test")
+    def test_gui_cli_instances_dir_option(self, tmp_path):
+        """gui_cli uses --instances-dir when provided."""
+        runner = CliRunner()
+        mock_launch = MagicMock()
+        custom_dir = tmp_path / "custom-instances"
+        with patch("scratch_monkey.gui.main.launch", mock_launch):
+            result = runner.invoke(gui_cli, ["--instances-dir", str(custom_dir)])
+        assert result.exit_code == 0
+        mock_launch.assert_called_once_with(custom_dir)
 
-        with patch("scratch_monkey.container.PodmanRunner"):
-            with patch("scratch_monkey.gui.models.AppModel", side_effect=mock_app_model_factory) as mock_app_model:
-                import importlib
+    def test_gui_cli_env_var(self, tmp_path):
+        """gui_cli uses SCRATCH_MONKEY_INSTANCES_DIR env var when no CLI option given."""
+        runner = CliRunner()
+        mock_launch = MagicMock()
+        env_dir = tmp_path / "env-instances"
+        with patch("scratch_monkey.gui.main.launch", mock_launch):
+            result = runner.invoke(
+                gui_cli, [], env={"SCRATCH_MONKEY_INSTANCES_DIR": str(env_dir)}
+            )
+        assert result.exit_code == 0
+        mock_launch.assert_called_once_with(env_dir)
 
-                gui_main_module = importlib.import_module("scratch_monkey.gui.main")
+    def test_gui_cli_option_takes_precedence_over_env_var(self, tmp_path):
+        """gui_cli --instances-dir takes precedence over env var."""
+        runner = CliRunner()
+        mock_launch = MagicMock()
+        env_dir = tmp_path / "env-instances"
+        cli_dir = tmp_path / "cli-instances"
+        with patch("scratch_monkey.gui.main.launch", mock_launch):
+            result = runner.invoke(
+                gui_cli,
+                ["--instances-dir", str(cli_dir)],
+                env={"SCRATCH_MONKEY_INSTANCES_DIR": str(env_dir)},
+            )
+        assert result.exit_code == 0
+        mock_launch.assert_called_once_with(cli_dir)
 
-                try:
-                    gui_main_module.main(instances_dir=None)
-                except RuntimeError as e:
-                    if str(e) != "stop_execution_test":
-                        raise
-
-        # Verify AppModel was called with the env var path
-        assert mock_app_model.called
-        call_args = mock_app_model.call_args
-        passed_dir = call_args.args[0]
-        assert passed_dir == Path(env_dir)
-
-    def test_main_uses_default_when_env_var_not_set(self, monkeypatch):
-        """gui main() uses default path when SCRATCH_MONKEY_INSTANCES_DIR is not set."""
-        monkeypatch.delenv("SCRATCH_MONKEY_INSTANCES_DIR", raising=False)
-
-        # Mock AppModel to exit early
-        def mock_app_model_factory(*args, **kwargs):
-            raise RuntimeError("stop_execution_test")
-
-        with patch("scratch_monkey.container.PodmanRunner"):
-            with patch("scratch_monkey.gui.models.AppModel", side_effect=mock_app_model_factory) as mock_app_model:
-                import importlib
-                gui_main_module = importlib.import_module("scratch_monkey.gui.main")
-
-                try:
-                    gui_main_module.main(instances_dir=None)
-                except RuntimeError as e:
-                    if str(e) != "stop_execution_test":
-                        raise
-
-        # Verify AppModel was called with the default path
-        assert mock_app_model.called
-        call_args = mock_app_model.call_args
-        passed_dir = call_args.args[0]
-        assert passed_dir == Path.home() / "scratch-monkey"
-
-    def test_main_prefers_explicit_arg_over_env_var(self, monkeypatch, tmp_path):
-        """gui main() prefers explicit instances_dir arg over env var."""
-        env_dir = str(tmp_path / "env-instances")
-        monkeypatch.setenv("SCRATCH_MONKEY_INSTANCES_DIR", env_dir)
-
-        explicit_dir = tmp_path / "explicit-instances"
-
-        # Mock AppModel to exit early
-        def mock_app_model_factory(*args, **kwargs):
-            raise RuntimeError("stop_execution_test")
-
-        with patch("scratch_monkey.container.PodmanRunner"):
-            with patch("scratch_monkey.gui.models.AppModel", side_effect=mock_app_model_factory) as mock_app_model:
-                import importlib
-                gui_main_module = importlib.import_module("scratch_monkey.gui.main")
-
-                try:
-                    gui_main_module.main(instances_dir=explicit_dir)
-                except RuntimeError as e:
-                    if str(e) != "stop_execution_test":
-                        raise
-
-        # Verify AppModel was called with the explicit path, not the env var
-        assert mock_app_model.called
-        call_args = mock_app_model.call_args
-        passed_dir = call_args.args[0]
-        assert passed_dir == explicit_dir
+    def test_gui_cli_help(self):
+        """gui_cli --help returns exit code 0 and shows usage."""
+        runner = CliRunner()
+        result = runner.invoke(gui_cli, ["--help"])
+        assert result.exit_code == 0
+        assert "Usage:" in result.output
+        assert "--instances-dir" in result.output
