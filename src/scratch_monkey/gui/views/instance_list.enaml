@@ -29,5 +29,5 @@ enamldef InstanceListPanel(Container): panel:
     PushButton: new_btn:
         text = "+ New Instance"
         clicked ::
-            dlg = CreateInstanceDialog(panel, app_model=app_model)
+            dlg = CreateInstanceDialog(panel, app_model=app_model, instance_model=app_model.new_instance_model())
             dlg.exec_()

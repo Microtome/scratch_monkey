@@ -20,7 +20,7 @@ enamldef ScratchMonkeyWindow(MainWindow): win:
         Action:
             text = "New Instance"
             triggered ::
-                dlg = CreateInstanceDialog(win, app_model=app_model)
+                dlg = CreateInstanceDialog(win, app_model=app_model, instance_model=app_model.new_instance_model())
                 dlg.exec_()
 
         Action:
