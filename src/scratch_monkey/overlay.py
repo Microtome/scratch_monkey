@@ -6,6 +6,7 @@ import os
 
 from .container import PodmanError, PodmanRunner
 from .instance import Instance, is_fedora_based
+from .shared import parse_shared_entry
 
 
 class OverlayError(Exception):
@@ -69,6 +70,17 @@ def _build_run_args(instance: Instance) -> list[str]:
     # Extra volumes
     for vol in cfg.volumes:
         args += ["-v", vol]
+
+    # Shared volumes
+    instances_dir = instance.directory.parent
+    for shared_entry in cfg.shared:
+        shared_name, mode = parse_shared_entry(shared_entry)
+        shared_path = instances_dir / ".shared" / shared_name
+        if shared_path.is_dir():
+            mount_spec = f"{shared_path}:/shared/{shared_name}"
+            if mode == "ro":
+                mount_spec += ":ro"
+            args += ["-v", mount_spec]
 
     # Extra env vars
     for var in cfg.env:

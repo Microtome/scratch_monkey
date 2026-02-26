@@ -23,8 +23,8 @@ Every coding agent assigned a feature follows this loop until all assigned featu
 ```
 1. Implement code
 2. Implement tests
-3. Lint          →  python3 -m ruff check src tests
-4. Run tests     →  python3 -m pytest tests/ -q
+3. Lint          →  uv run ruff check src tests
+4. Run tests     →  uv run pytest -q
 5. Fix any failures and return to step 1
 6. When all assigned features pass lint + tests → report completion
 ```
@@ -136,7 +136,7 @@ docs: document overlay mode in README
 ### Tech Stack
 
 - **Language**: Python 3.11+
-- **Package manager**: pip (uv not available on this machine)
+- **Package manager**: uv (`~/.local/bin/uv`)
 - **Build**: hatchling (`pyproject.toml`)
 - **CLI**: Click
 - **GUI**: Enaml + Qt6 (optional dep)
