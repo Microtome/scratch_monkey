@@ -9,6 +9,8 @@ from scratch_monkey.config import InstanceConfig
 from scratch_monkey.container import PodmanError, PodmanRunner
 from scratch_monkey.instance import Instance
 from scratch_monkey.overlay import (
+    _build_run_args,
+    _gpu_devices,
     _overlay_name,
     _setup_fedora_user,
     ensure_running,
@@ -202,6 +204,83 @@ class TestReset:
         result = reset(scratch_instance, mock_runner)
         assert result is False
         mock_runner.remove.assert_not_called()
+
+
+# ─── _gpu_devices ─────────────────────────────────────────────────────────────
+
+
+class TestGpuDevices:
+    def test_detects_dri(self, tmp_path):
+        with patch("os.path.exists", side_effect=lambda p: p == "/dev/dri"):
+            devices = _gpu_devices()
+        assert "/dev/dri" in devices
+
+    def test_detects_kfd(self, tmp_path):
+        with patch("os.path.exists", side_effect=lambda p: p == "/dev/kfd"):
+            devices = _gpu_devices()
+        assert "/dev/kfd" in devices
+
+    def test_detects_nvidia_devices(self):
+        nvidia_devs = {"/dev/nvidia0", "/dev/nvidiactl", "/dev/nvidia-modeset",
+                       "/dev/nvidia-uvm", "/dev/nvidia-uvm-tools"}
+        with patch("os.path.exists", side_effect=lambda p: p in nvidia_devs):
+            devices = _gpu_devices()
+        for dev in nvidia_devs:
+            assert dev in devices
+
+    def test_empty_when_no_gpu(self):
+        with patch("os.path.exists", return_value=False):
+            devices = _gpu_devices()
+        assert devices == []
+
+    def test_detects_multiple(self):
+        present = {"/dev/dri", "/dev/kfd", "/dev/nvidia0"}
+        with patch("os.path.exists", side_effect=lambda p: p in present):
+            devices = _gpu_devices()
+        assert "/dev/dri" in devices
+        assert "/dev/kfd" in devices
+        assert "/dev/nvidia0" in devices
+
+
+# ─── _build_run_args gpu + devices ────────────────────────────────────────────
+
+
+class TestBuildRunArgsGpuAndDevices:
+    def test_gpu_flag_adds_detected_devices(self, scratch_instance):
+        scratch_instance.config.gpu = True
+        with patch("scratch_monkey.overlay._gpu_devices", return_value=["/dev/dri", "/dev/kfd"]):
+            args = _build_run_args(scratch_instance)
+        assert "--device" in args
+        assert "/dev/dri" in args
+        assert "/dev/kfd" in args
+
+    def test_gpu_false_no_gpu_devices(self, scratch_instance):
+        scratch_instance.config.gpu = False
+        with patch("scratch_monkey.overlay._gpu_devices", return_value=["/dev/dri"]):
+            args = _build_run_args(scratch_instance)
+        # _gpu_devices should not be consulted at all
+        assert "/dev/dri" not in args
+
+    def test_extra_devices_added(self, scratch_instance):
+        scratch_instance.config.devices = ["/dev/video0", "/dev/bus/usb"]
+        args = _build_run_args(scratch_instance)
+        assert "--device" in args
+        assert "/dev/video0" in args
+        assert "/dev/bus/usb" in args
+
+    def test_no_devices_when_empty(self, scratch_instance):
+        scratch_instance.config.gpu = False
+        scratch_instance.config.devices = []
+        args = _build_run_args(scratch_instance)
+        assert "--device" not in args
+
+    def test_gpu_and_extra_devices_combined(self, scratch_instance):
+        scratch_instance.config.gpu = True
+        scratch_instance.config.devices = ["/dev/video0"]
+        with patch("scratch_monkey.overlay._gpu_devices", return_value=["/dev/dri"]):
+            args = _build_run_args(scratch_instance)
+        assert "/dev/dri" in args
+        assert "/dev/video0" in args
 
 
 # ─── _build_run_args shared volumes ────────────────────────────────────────────

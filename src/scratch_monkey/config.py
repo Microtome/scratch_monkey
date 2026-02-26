@@ -42,6 +42,8 @@ class InstanceConfig:
     env: list[str] = field(default_factory=list)
     shared: list[str] = field(default_factory=list)
     overlay: bool = False
+    gpu: bool = False
+    devices: list[str] = field(default_factory=list)
 
 
 def load(path: Path) -> InstanceConfig:
@@ -77,6 +79,8 @@ def load(path: Path) -> InstanceConfig:
         env=_strlist(data.get("env", [])),
         shared=_strlist(data.get("shared", [])),
         overlay=_bool(data.get("overlay", False)),
+        gpu=_bool(data.get("gpu", False)),
+        devices=_strlist(data.get("devices", [])),
     )
 
 
@@ -126,5 +130,7 @@ def _serialize(config: InstanceConfig) -> str:
     lines.append(f"env = {_toml_strlist(config.env)}\n")
     lines.append(f"shared = {_toml_strlist(config.shared)}\n")
     lines.append(f"overlay = {str(config.overlay).lower()}\n")
+    lines.append(f"gpu = {str(config.gpu).lower()}\n")
+    lines.append(f"devices = {_toml_strlist(config.devices)}\n")
 
     return "".join(lines)

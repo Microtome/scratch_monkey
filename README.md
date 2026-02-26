@@ -100,6 +100,8 @@ All fields are optional — commented-out defaults are shown when an instance is
 | `env` | list | `[]` | Extra environment variables (`KEY=value`) |
 | `shared` | list | `[]` | Shared volume names (mounted at `/shared/<name>`; append `:ro` for read-only) |
 | `overlay` | bool | `false` | Enable overlay mode (persistent writable layer) |
+| `gpu` | bool | `false` | Enable GPU passthrough (auto-detects `/dev/dri`, `/dev/kfd`, `/dev/nvidia*`) |
+| `devices` | list | `[]` | Extra device paths to mount (e.g. `/dev/video0`, `/dev/bus/usb`) |
 
 Example:
 
@@ -110,6 +112,8 @@ ssh = true
 volumes = ["/home/linuxbrew/.linuxbrew:/home/linuxbrew/.linuxbrew:ro"]
 shared = ["comms", "data:ro"]
 overlay = true
+gpu = true
+devices = ["/dev/video0"]
 ```
 
 ---
@@ -200,8 +204,9 @@ scratch-monkey --instances-dir /path/to/dir gui  # use a custom instances direct
 
 The GUI provides:
 - Instance list with image/overlay status
-- Configuration editing (cmd, wayland, ssh, overlay)
+- Configuration editing (cmd, wayland, ssh, overlay, GPU passthrough)
 - Volume mount management (add/remove host:container mounts, set rw/ro mode)
+- Device management (add/remove extra device paths)
 - Shared volume toggling (enable/disable per-instance, set rw/ro mode)
 - Action buttons (enter, enter as root, build, reset overlay, delete)
 

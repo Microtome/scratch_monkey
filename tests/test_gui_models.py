@@ -46,6 +46,47 @@ class TestVolumeMountEntry:
         assert e.to_spec() == original
 
 
+class TestInstanceModelGpuAndDevices:
+    def _make_info(self, gpu=False, devices=None):
+        cfg = InstanceConfig(
+            gpu=gpu,
+            devices=devices or [],
+        )
+        return InstanceInfo(
+            name="test",
+            directory="/tmp/test",
+            image_built=False,
+            overlay_running=False,
+            config=cfg,
+        )
+
+    def test_from_info_populates_gpu_and_devices(self):
+        info = self._make_info(gpu=True, devices=["/dev/dri", "/dev/video0"])
+        m = InstanceModel.from_info(info)
+        assert m.gpu is True
+        assert m.devices == ["/dev/dri", "/dev/video0"]
+
+    def test_from_info_defaults_gpu_false(self):
+        info = self._make_info()
+        m = InstanceModel.from_info(info)
+        assert m.gpu is False
+        assert m.devices == []
+
+    def test_to_config_serializes_gpu_and_devices(self):
+        m = InstanceModel()
+        m.gpu = True
+        m.devices = ["/dev/dri", "/dev/kfd"]
+        cfg = m.to_config()
+        assert cfg.gpu is True
+        assert cfg.devices == ["/dev/dri", "/dev/kfd"]
+
+    def test_to_config_gpu_false_by_default(self):
+        m = InstanceModel()
+        cfg = m.to_config()
+        assert cfg.gpu is False
+        assert cfg.devices == []
+
+
 class TestInstanceModelVolumes:
     def _make_info(self, volumes=None, shared=None):
         cfg = InstanceConfig(

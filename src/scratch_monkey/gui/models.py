@@ -102,6 +102,8 @@ class InstanceModel(Atom):
     ssh = Bool(False)
     home = Str("")
     overlay = Bool(False)
+    gpu = Bool(False)
+    devices = List(str)
     shared = List(str)
     volumes = List(str)
     env_vars = List(str)
@@ -124,6 +126,8 @@ class InstanceModel(Atom):
         m.ssh = cfg.ssh
         m.home = cfg.home
         m.overlay = cfg.overlay
+        m.gpu = cfg.gpu
+        m.devices = list(cfg.devices)
         m.shared = list(cfg.shared)
         m.volumes = list(cfg.volumes)
         m.env_vars = list(cfg.env)
@@ -145,9 +149,14 @@ class InstanceModel(Atom):
                 if e.enabled
             ],
             overlay=self.overlay,
+            gpu=self.gpu,
+            devices=list(self.devices),
         )
 
-    @observe('cmd', 'wayland', 'ssh', 'home', 'overlay', 'volume_entries', 'env_vars', 'shared_entries')
+    @observe(
+        'cmd', 'wayland', 'ssh', 'home', 'overlay', 'gpu', 'devices',
+        'volume_entries', 'env_vars', 'shared_entries',
+    )
     def _on_config_change(self, change):
         if self._saved_config is not None:
             self.dirty = (self.to_config() != self._saved_config)
@@ -166,6 +175,8 @@ class InstanceModel(Atom):
             self.ssh = cfg.ssh
             self.home = cfg.home
             self.overlay = cfg.overlay
+            self.gpu = cfg.gpu
+            self.devices = list(cfg.devices)
             self.env_vars = list(cfg.env)
             self.volume_entries = [VolumeMountEntry.from_spec(v) for v in cfg.volumes]
             self.shared = list(cfg.shared)
