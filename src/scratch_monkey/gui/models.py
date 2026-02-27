@@ -16,6 +16,7 @@ except ImportError:
 
 from ..config import ConfigError, InstanceConfig, save
 from ..container import PodmanRunner
+from ..export import export_command as export_command_fn
 from ..instance import Instance, InstanceError, InstanceInfo, clone, create, delete, list_all, rename, skel_copy
 from ..overlay import reset as overlay_reset
 from ..shared import list_shared, parse_shared_entry
@@ -354,6 +355,20 @@ class AppModel(Atom):
         except Exception as e:
             return str(e)
         self.refresh()
+        return ""
+
+    def export_command(self, name: str, cmd: str, bin_name: str = "") -> str:
+        """Export a command from an instance. Returns '' on success or error string."""
+        instances_dir = Path(self.instances_dir)
+        inst_dir = instances_dir / name
+        if not inst_dir.is_dir():
+            return f"Instance {name!r} not found"
+        inst = Instance.from_directory(inst_dir)
+        try:
+            path = export_command_fn(inst, cmd, bin_name=bin_name)
+            self.status_message = f"Exported {cmd!r} from {name!r} to {path}"
+        except Exception as e:
+            return str(e)
         return ""
 
     def new_instance_model(self) -> InstanceModel:

@@ -773,3 +773,89 @@ class TestInstanceModelDirty:
         inst_model.cmd = "/bin/zsh"
 
         assert app.has_unsaved_changes() is True
+
+
+class TestAppModelExportCommand:
+    """Tests for AppModel.export_command()."""
+
+    def _make_app(self, tmp_path):
+        from unittest.mock import MagicMock, patch
+
+        instances_dir = tmp_path / "scratch-monkey"
+        instances_dir.mkdir()
+
+        runner = MagicMock()
+        runner.container_exists.return_value = False
+        runner.container_running.return_value = False
+        runner.image_exists.return_value = False
+
+        project_dir = tmp_path / "project"
+        project_dir.mkdir()
+
+        with patch("scratch_monkey.gui.models._PROJECT_DIR", project_dir):
+            app = AppModel(instances_dir=instances_dir, runner=runner)
+
+        return app, instances_dir, project_dir
+
+    def test_export_command_success(self, tmp_path):
+        """export_command returns '' and sets status on success."""
+        from pathlib import Path as P
+        from unittest.mock import patch
+
+        app, instances_dir, project_dir = self._make_app(tmp_path)
+
+        with patch("scratch_monkey.gui.models._PROJECT_DIR", project_dir):
+            app.create_instance("myinst")
+
+        mock_path = P("/home/user/.local/bin/rg")
+        with patch("scratch_monkey.gui.models.export_command_fn", return_value=mock_path) as mock_export:
+            err = app.export_command("myinst", "/usr/bin/rg")
+
+        assert err == ""
+        assert "rg" in app.status_message
+        assert "myinst" in app.status_message
+        mock_export.assert_called_once()
+        # Verify the Instance and cmd were passed correctly
+        call_args = mock_export.call_args
+        assert call_args[0][1] == "/usr/bin/rg"
+        assert call_args[1]["bin_name"] == ""
+
+    def test_export_command_not_found(self, tmp_path):
+        """export_command returns error for nonexistent instance."""
+        app, instances_dir, project_dir = self._make_app(tmp_path)
+
+        err = app.export_command("nonexistent", "/usr/bin/rg")
+        assert err != ""
+        assert "nonexistent" in err
+
+    def test_export_command_with_bin_name(self, tmp_path):
+        """export_command passes bin_name to export_command_fn."""
+        from pathlib import Path as P
+        from unittest.mock import patch
+
+        app, instances_dir, project_dir = self._make_app(tmp_path)
+
+        with patch("scratch_monkey.gui.models._PROJECT_DIR", project_dir):
+            app.create_instance("myinst")
+
+        mock_path = P("/home/user/.local/bin/ripgrep")
+        with patch("scratch_monkey.gui.models.export_command_fn", return_value=mock_path) as mock_export:
+            err = app.export_command("myinst", "/usr/bin/rg", "ripgrep")
+
+        assert err == ""
+        call_args = mock_export.call_args
+        assert call_args[1]["bin_name"] == "ripgrep"
+
+    def test_export_command_exception(self, tmp_path):
+        """export_command returns error string when export_command_fn raises."""
+        from unittest.mock import patch
+
+        app, instances_dir, project_dir = self._make_app(tmp_path)
+
+        with patch("scratch_monkey.gui.models._PROJECT_DIR", project_dir):
+            app.create_instance("myinst")
+
+        with patch("scratch_monkey.gui.models.export_command_fn", side_effect=RuntimeError("disk full")):
+            err = app.export_command("myinst", "/usr/bin/rg")
+
+        assert err == "disk full"
