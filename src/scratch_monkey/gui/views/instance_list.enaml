@@ -91,6 +91,7 @@ enamldef InstanceListPanel(Container): panel:
                 iterable << app_model.instances
                 HGroup:
                     attr inst = loop_item
+                    align_widths = False
                     padding = 0
                     spacing = 2
                     PushButton: btn:
