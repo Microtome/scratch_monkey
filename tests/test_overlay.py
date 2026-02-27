@@ -158,10 +158,25 @@ class TestSetupFedoraUser:
         mock_runner.exec_capture.side_effect = [
             "",  # sudo install
             PodmanError("useradd: user exists"),  # useradd
+            "",  # chown
             "",  # sudoers
         ]
         with patch.dict(os.environ, {"USER": "testuser"}):
             _setup_fedora_user("mycontainer", mock_runner)  # should not raise
+
+    def test_chowns_home_directory(self, mock_runner):
+        """Home directory must be chowned to the created user."""
+        mock_runner.exec_capture.return_value = ""
+        with patch.dict(os.environ, {"USER": "testuser"}):
+            _setup_fedora_user("mycontainer", mock_runner)
+        all_calls = mock_runner.exec_capture.call_args_list
+        # Find the chown call
+        uid = os.getuid()
+        chown_called = any(
+            call[0][1] == ["chown", f"{uid}:{uid}", "/home/testuser"]
+            for call in all_calls
+        )
+        assert chown_called, "chown with correct uid and home path must be called"
 
 
 # ─── exec_shell ───────────────────────────────────────────────────────────────
