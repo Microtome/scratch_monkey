@@ -88,6 +88,9 @@ enamldef InstanceDetailPanel(Container): panel:
                         style_class = "instance-title"
 
                     Label:
+                        text << f"Path: {app_model.selected.directory}" if app_model.selected else "Path: —"
+
+                    Label:
                         text << f"Base: {app_model.selected.base_image}" if app_model.selected and app_model.selected.base_image else "Base: unknown"
 
                     GroupBox:
@@ -137,6 +140,12 @@ enamldef InstanceDetailPanel(Container): panel:
                                 clicked ::
                                     app_model.edit_file(app_model.selected_instance, "env")
                                 tool_tip = "Open the .env file in your editor ($VISUAL/$EDITOR)"
+
+                            PushButton:
+                                text = "Edit Config"
+                                clicked ::
+                                    app_model.edit_config(app_model.selected_instance)
+                                tool_tip = "Edit scratch.toml in your editor; config reloads when editor closes"
 
                     HGroup:
                         PushButton:

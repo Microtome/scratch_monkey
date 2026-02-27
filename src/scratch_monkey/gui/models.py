@@ -5,6 +5,7 @@ from __future__ import annotations
 import os
 import shutil
 import subprocess
+import threading
 from pathlib import Path
 
 try:
@@ -398,6 +399,33 @@ class AppModel(Atom):
             self.status_message = err
         else:
             self.status_message = f"Editing {file_type} for {name!r}..."
+
+    def edit_config(self, name: str) -> None:
+        """Open scratch.toml in the user's editor, refreshing config on close."""
+        instances_dir = Path(self.instances_dir)
+        inst_dir = instances_dir / name
+        if not inst_dir.is_dir():
+            self.status_message = f"Instance {name!r} not found"
+            return
+        target = inst_dir / "scratch.toml"
+        editor = os.environ.get("VISUAL") or os.environ.get("EDITOR", "vi")
+        prefix = _find_terminal()
+        if not prefix:
+            self.status_message = (
+                "No terminal emulator found. Install xdg-terminal-exec, "
+                "gnome-terminal, or similar."
+            )
+            return
+        proc = subprocess.Popen([*prefix, editor, str(target)])
+        self.status_message = f"Editing config for {name!r}..."
+
+        def _wait_and_refresh():
+            proc.wait()
+            self.refresh()
+            if self.selected_instance == name:
+                self.status_message = f"Reloaded config for {name!r}"
+
+        threading.Thread(target=_wait_and_refresh, daemon=True).start()
 
     def new_instance_model(self) -> InstanceModel:
         """Create a fresh InstanceModel with shared entries initialized."""
