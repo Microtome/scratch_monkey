@@ -113,9 +113,10 @@ def create_cmd(ctx: click.Context, name: str, fedora: bool, skel: bool) -> None:
 def clone_cmd(ctx: click.Context, source: str, dest: str) -> None:
     """Clone an existing instance (fresh home directory)."""
     instances_dir: Path = ctx.obj["instances_dir"]
+    runner: PodmanRunner = ctx.obj["runner"]
     try:
-        clone(source, dest, instances_dir)
-    except (InstanceError, ConfigError) as e:
+        clone(source, dest, instances_dir, runner)
+    except (InstanceError, ConfigError, PodmanError) as e:
         click.echo(f"Error: {e}", err=True)
         sys.exit(1)
     click.echo(f"Cloned {source!r} → {dest!r} (fresh home directory)")

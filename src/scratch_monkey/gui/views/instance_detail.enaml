@@ -41,8 +41,11 @@ enamldef InstanceDetailPanel(Container): panel:
             Container:
                 VGroup:
                     Label:
-                        text << f"Instance: {app_model.selected_instance}"
+                        text << app_model.selected_instance
                         style_class = "instance-title"
+
+                    Label:
+                        text << f"Base: {app_model.selected.base_image}" if app_model.selected and app_model.selected.base_image else "Base: unknown"
 
                     GroupBox:
                         title = "Actions"

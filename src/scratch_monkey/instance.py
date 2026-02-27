@@ -94,10 +94,11 @@ def create(
     return Instance(name=name, directory=instance_dir, config=config, home_dir=home_dir)
 
 
-def clone(source: str, dest: str, instances_dir: Path) -> Instance:
+def clone(source: str, dest: str, instances_dir: Path, runner: PodmanRunner | None = None) -> Instance:
     """Clone an existing instance (copies Dockerfile + config, fresh home/).
 
     Raises InstanceError if source doesn't exist or dest already exists.
+    If a runner is provided and the source has a built image, tags it for the dest.
     """
     validate_name(dest)
     instances_dir = Path(instances_dir)
@@ -125,6 +126,10 @@ def clone(source: str, dest: str, instances_dir: Path) -> Instance:
     if config.overlay_id:
         config.overlay_id = ""
         save(dst_dir / "scratch.toml", config)
+
+    if runner is not None and runner.image_exists(source):
+        runner.tag(source, dest)
+
     home_dir = dst_dir / "home"
     return Instance(name=dest, directory=dst_dir, config=config, home_dir=home_dir)
 
@@ -194,6 +199,7 @@ class InstanceInfo:
     image_built: bool
     overlay_running: bool
     config: InstanceConfig
+    base_image: str | None = None
 
 
 def list_all(instances_dir: Path, runner: PodmanRunner) -> list[InstanceInfo]:
@@ -213,6 +219,7 @@ def list_all(instances_dir: Path, runner: PodmanRunner) -> list[InstanceInfo]:
         image_built = runner.image_exists(entry.name)
         overlay_name = config.overlay_id if config.overlay_id else f"{entry.name}-overlay"
         overlay_running = runner.container_running(overlay_name)
+        base_image = detect_base_image(entry)
         results.append(
             InstanceInfo(
                 name=entry.name,
@@ -220,6 +227,7 @@ def list_all(instances_dir: Path, runner: PodmanRunner) -> list[InstanceInfo]:
                 image_built=image_built,
                 overlay_running=overlay_running,
                 config=config,
+                base_image=base_image,
             )
         )
     return results

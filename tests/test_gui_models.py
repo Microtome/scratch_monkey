@@ -46,6 +46,32 @@ class TestVolumeMountEntry:
         assert e.to_spec() == original
 
 
+class TestInstanceModelBaseImage:
+    def test_from_info_populates_base_image(self):
+        info = InstanceInfo(
+            name="test",
+            directory="/tmp/test",
+            image_built=False,
+            overlay_running=False,
+            config=InstanceConfig(),
+            base_image="scratch_dev_fedora",
+        )
+        m = InstanceModel.from_info(info)
+        assert m.base_image == "scratch_dev_fedora"
+
+    def test_from_info_base_image_none_becomes_empty(self):
+        info = InstanceInfo(
+            name="test",
+            directory="/tmp/test",
+            image_built=False,
+            overlay_running=False,
+            config=InstanceConfig(),
+            base_image=None,
+        )
+        m = InstanceModel.from_info(info)
+        assert m.base_image == ""
+
+
 class TestInstanceModelGpuAndDevices:
     def _make_info(self, gpu=False, devices=None):
         cfg = InstanceConfig(
@@ -577,6 +603,24 @@ class TestAppModelCloneInstance:
 
         assert err != ""
         assert app.selected_instance == "source"  # unchanged
+
+    def test_clone_passes_runner_and_tags_image(self, tmp_path):
+        """Clone passes runner to clone(); runner.tag() called when image exists."""
+        from unittest.mock import patch
+
+        app, instances_dir, project_dir = self._make_app(tmp_path)
+
+        with patch("scratch_monkey.gui.models._PROJECT_DIR", project_dir):
+            app.create_instance("source")
+
+        # Mark source image as existing so tag() gets called
+        app._runner.image_exists.return_value = True
+
+        with patch("scratch_monkey.gui.models._PROJECT_DIR", project_dir):
+            err = app.clone_instance("source", "dest")
+
+        assert err == ""
+        app._runner.tag.assert_called_once_with("source", "dest")
 
 
 class TestInstanceModelEnvVars:

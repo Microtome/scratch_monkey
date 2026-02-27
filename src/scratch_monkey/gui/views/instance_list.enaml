@@ -8,6 +8,7 @@ from enaml.stdlib.dialog_buttons import DialogButton
 from enaml.widgets.api import Container, Dialog, Field, HGroup, Label, PushButton, ScrollArea, VGroup
 from enaml.layout.api import vbox
 from enaml.core.api import Looper
+from enaml.styling import StyleSheet, Style, Setter
 
 from scratch_monkey.gui.views.create_dialog import CreateInstanceDialog
 
@@ -83,6 +84,18 @@ enamldef InstanceListPanel(Container): panel:
     attr app_model
     minimum_size = (350, 0)
 
+    StyleSheet:
+        Style:
+            style_class = "status-running"
+            Setter:
+                field = "color"
+                value = "#22aa22"
+        Style:
+            style_class = "status-stopped"
+            Setter:
+                field = "color"
+                value = "#cc2222"
+
     constraints = [vbox(scroll, new_btn)]
 
     ScrollArea: scroll:
@@ -95,15 +108,22 @@ enamldef InstanceListPanel(Container): panel:
                     align_widths = False
                     padding = 0
                     spacing = 2
+                    Label:
+                        text = "\u25CF"
+                        style_class << ("status-running" if inst.overlay_running else "status-stopped")
+                        tool_tip << ("Running" if inst.overlay_running else "Built" if inst.image_built else "No image")
+                        minimum_size = (16, 0)
+                        maximum_size = (16, 16777215)
+                    Label:
+                        text << ("F" if "fedora" in (inst.base_image or "").lower() else "\u2013")
+                        tool_tip << (inst.base_image if inst.base_image and "fedora" in inst.base_image.lower() else "Scratch")
+                        minimum_size = (16, 0)
+                        maximum_size = (16, 16777215)
                     PushButton: btn:
                         checkable = True
                         checked << (app_model.selected_instance == inst.name)
                         hug_width = 'ignore'
-                        text << (
-                            "[running] " if inst.overlay_running
-                            else "[built]   " if inst.image_built
-                            else "[no img]  "
-                        ) + inst.name
+                        text << inst.name
                         clicked ::
                             proceed = True
                             if app_model.selected and app_model.selected.dirty:

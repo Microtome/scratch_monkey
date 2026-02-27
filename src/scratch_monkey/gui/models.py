@@ -96,6 +96,7 @@ class InstanceModel(Atom):
     directory = Str()
     image_built = Bool(False)
     overlay_running = Bool(False)
+    base_image = Str("")
 
     # Config fields
     cmd = Str("/bin/bash")
@@ -121,6 +122,7 @@ class InstanceModel(Atom):
         m.directory = str(info.directory)
         m.image_built = info.image_built
         m.overlay_running = info.overlay_running
+        m.base_image = info.base_image or ""
         cfg = info.config
         m.cmd = cfg.cmd
         m.wayland = cfg.wayland
@@ -346,7 +348,7 @@ class AppModel(Atom):
     def clone_instance(self, source: str, dest: str) -> str:
         """Clone an instance. Returns '' on success or error string."""
         try:
-            clone(source, dest, Path(self.instances_dir))
+            clone(source, dest, Path(self.instances_dir), self._runner)
             self.status_message = f"Cloned {source!r} to {dest!r}"
             self.selected_instance = dest
         except Exception as e:

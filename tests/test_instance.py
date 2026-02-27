@@ -138,6 +138,20 @@ class TestClone:
         with pytest.raises(ConfigError):
             clone("source", ".invalid", instances_dir)
 
+    def test_clone_tags_image_when_source_has_image(self, instances_dir, source_instance, mock_runner):
+        mock_runner.image_exists.return_value = True
+        clone("source", "dest", instances_dir, runner=mock_runner)
+        mock_runner.tag.assert_called_once_with("source", "dest")
+
+    def test_clone_skips_tag_when_no_image(self, instances_dir, source_instance, mock_runner):
+        mock_runner.image_exists.return_value = False
+        clone("source", "dest", instances_dir, runner=mock_runner)
+        mock_runner.tag.assert_not_called()
+
+    def test_clone_without_runner_succeeds(self, instances_dir, source_instance):
+        inst = clone("source", "dest", instances_dir)
+        assert inst.name == "dest"
+
 
 # ─── delete ───────────────────────────────────────────────────────────────────
 
@@ -214,6 +228,14 @@ class TestListAll:
         mock_runner.image_exists.return_value = True
         result = list_all(instances_dir, mock_runner)
         assert result[0].image_built is True
+
+    def test_list_all_populates_base_image(self, instances_dir, project_dir, mock_runner):
+        create("scratch-inst", instances_dir, "scratch_dev", project_dir)
+        create("fedora-inst", instances_dir, "scratch_dev_fedora", project_dir)
+        result = list_all(instances_dir, mock_runner)
+        by_name = {r.name: r for r in result}
+        assert by_name["scratch-inst"].base_image == "scratch_dev"
+        assert by_name["fedora-inst"].base_image == "scratch_dev_fedora"
 
 
 # ─── skel_copy ────────────────────────────────────────────────────────────────
