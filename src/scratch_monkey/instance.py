@@ -152,6 +152,39 @@ def delete(name: str, instances_dir: Path, runner: PodmanRunner) -> None:
     shutil.rmtree(instance_dir)
 
 
+def rename(old_name: str, new_name: str, instances_dir: Path, runner: PodmanRunner) -> Instance:
+    """Rename an instance: directory, image tag, and clean up legacy overlay.
+
+    Raises InstanceError if old doesn't exist, new already exists, or name is invalid.
+    Returns the Instance loaded from the new directory.
+    """
+    validate_name(new_name)
+    instances_dir = Path(instances_dir)
+    old_dir = instances_dir / old_name
+    new_dir = instances_dir / new_name
+
+    if not old_dir.is_dir():
+        raise InstanceError(f"Instance {old_name!r} not found at {old_dir}")
+    if new_dir.exists():
+        raise InstanceError(f"Instance {new_name!r} already exists at {new_dir}")
+
+    # Clean up legacy overlay container ({old_name}-overlay) if present.
+    # The decoupled overlay_id container is unaffected by the rename.
+    legacy_overlay = f"{old_name}-overlay"
+    if runner.container_exists(legacy_overlay):
+        runner.remove(legacy_overlay, force=True)
+
+    # Retag image if it exists
+    if runner.image_exists(old_name):
+        runner.tag(old_name, new_name)
+        runner.rmi(old_name)
+
+    # Rename directory
+    old_dir.rename(new_dir)
+
+    return Instance.from_directory(new_dir)
+
+
 @dataclass
 class InstanceInfo:
     """Summary info for a listed instance."""
