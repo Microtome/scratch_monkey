@@ -172,14 +172,30 @@ enamldef ConfigEditorPanel(Container): editor:
                     align_widths = False
                     Field:
                         hug_width = 'ignore'
-                        text << (editor.model.env_vars[loop.item] if editor.model and loop.item < len(editor.model.env_vars) else "")
+                        text << (editor.model.env_vars[loop.item].split("=", 1)[0] if editor.model and loop.item < len(editor.model.env_vars) else "")
                         text ::
                             if editor.model and loop.item < len(editor.model.env_vars):
+                                old = editor.model.env_vars[loop.item]
+                                val = old.split("=", 1)[1] if "=" in old else ""
                                 entries = list(editor.model.env_vars)
-                                entries[loop.item] = text
+                                entries[loop.item] = text + "=" + val
                                 editor.model.env_vars = entries
                                 editor.model.check_dirty()
-                        placeholder = "KEY=value"
+                        placeholder = "KEY"
+                        submit_triggers = ['lost_focus', 'return_pressed', 'auto_sync']
+
+                    Field:
+                        hug_width = 'ignore'
+                        text << (editor.model.env_vars[loop.item].split("=", 1)[1] if editor.model and loop.item < len(editor.model.env_vars) and "=" in editor.model.env_vars[loop.item] else "")
+                        text ::
+                            if editor.model and loop.item < len(editor.model.env_vars):
+                                old = editor.model.env_vars[loop.item]
+                                key = old.split("=", 1)[0] if "=" in old else old
+                                entries = list(editor.model.env_vars)
+                                entries[loop.item] = key + "=" + text
+                                editor.model.env_vars = entries
+                                editor.model.check_dirty()
+                        placeholder = "value"
                         submit_triggers = ['lost_focus', 'return_pressed', 'auto_sync']
 
                     PushButton:
