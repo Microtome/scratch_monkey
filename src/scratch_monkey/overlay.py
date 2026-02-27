@@ -42,6 +42,7 @@ def _build_run_args(instance: Instance) -> list[str]:
         "--security-opt", "label=disable",
         "--network", "host",
         "--hostname", f"{instance.name}.{_short_hostname()}",
+        "--userns=keep-id",
         "-e", f"HOME={container_home}",
         "-e", f"USER={os.environ.get('USER', 'user')}",
         "-e", f"SCRATCH_INSTANCE={instance.name}",
@@ -165,6 +166,7 @@ def _setup_fedora_user(container_name: str, runner: PodmanRunner) -> None:
         runner.exec_capture(
             container_name,
             ["bash", "-c", "rpm -q sudo &>/dev/null || dnf install -y sudo"],
+            user="root",
         )
     except PodmanError:
         pass  # best-effort
@@ -174,19 +176,10 @@ def _setup_fedora_user(container_name: str, runner: PodmanRunner) -> None:
         runner.exec_capture(
             container_name,
             ["useradd", "-u", str(uid), "-M", "-s", "/bin/bash", username],
+            user="root",
         )
     except PodmanError:
         pass  # user may already exist
-
-    # Ensure home directory is owned by the user
-    container_home = f"/home/{username}"
-    try:
-        runner.exec_capture(
-            container_name,
-            ["chown", f"{uid}:{uid}", container_home],
-        )
-    except PodmanError:
-        pass  # best-effort
 
     # Grant passwordless sudo
     sudoers_line = f"{username} ALL=(ALL) NOPASSWD: ALL"
@@ -197,6 +190,7 @@ def _setup_fedora_user(container_name: str, runner: PodmanRunner) -> None:
             f"echo '{sudoers_line}' > /etc/sudoers.d/{username} "
             f"&& chmod 440 /etc/sudoers.d/{username}",
         ],
+        user="root",
     )
 
 
