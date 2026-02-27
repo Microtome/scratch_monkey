@@ -85,7 +85,8 @@ enamldef InstanceListPanel(Container): panel:
     constraints = [vbox(scroll, new_btn)]
 
     ScrollArea: scroll:
-        Container:
+        VGroup:
+            spacing = 2
             Looper:
                 iterable << app_model.instances
                 HGroup:
