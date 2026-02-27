@@ -63,12 +63,6 @@ enamldef InstanceDetailPanel(Container): panel:
                                     app_model.reset_overlay(app_model.selected_instance)
                                 tool_tip = "Remove the overlay container and discard its changes"
 
-                            PushButton:
-                                text = "Delete"
-                                clicked ::
-                                    app_model.delete_instance(app_model.selected_instance)
-                                tool_tip = "Permanently delete this instance and its files"
-
                     HGroup:
                         PushButton:
                             text = "Save Config"
