@@ -137,6 +137,11 @@ def delete(name: str, instances_dir: Path, runner: PodmanRunner) -> None:
     if not instance_dir.is_dir():
         raise InstanceError(f"Instance {name!r} not found at {instance_dir}")
 
+    # Remove overlay container if it exists
+    overlay_name = f"{name}-overlay"
+    if runner.container_exists(overlay_name):
+        runner.remove(overlay_name, force=True)
+
     if runner.image_exists(name):
         runner.rmi(name)
 

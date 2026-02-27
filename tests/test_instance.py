@@ -160,6 +160,23 @@ class TestDelete:
         with pytest.raises(InstanceError, match="not found"):
             delete("missing", instances_dir, mock_runner)
 
+    def test_delete_removes_overlay_container(self, instances_dir, project_dir, mock_runner):
+        create("myproject", instances_dir, "scratch_dev", project_dir)
+        mock_runner.container_exists.return_value = True
+        delete("myproject", instances_dir, mock_runner)
+        mock_runner.remove.assert_called_with("myproject-overlay", force=True)
+
+    def test_delete_skips_overlay_when_not_exists(self, instances_dir, project_dir, mock_runner):
+        create("myproject", instances_dir, "scratch_dev", project_dir)
+        mock_runner.container_exists.return_value = False
+        delete("myproject", instances_dir, mock_runner)
+        # Verify remove was not called with the overlay name
+        # Check that no calls to remove were made for the overlay
+        if mock_runner.remove.called:
+            # Make sure it wasn't called with the overlay name
+            for call in mock_runner.remove.call_args_list:
+                assert call[0][0] != "myproject-overlay"
+
 
 # ─── list_all ─────────────────────────────────────────────────────────────────
 
