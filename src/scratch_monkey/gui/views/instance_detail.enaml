@@ -33,32 +33,7 @@ enamldef InstanceDetailPanel(Container): panel:
                 VGroup:
                     Label:
                         text << f"Instance: {app_model.selected_instance}"
-
-                    ConfigEditorPanel:
-                        model << app_model.selected
-                        available_shared << app_model.available_shared
-                        app_model = panel.app_model
-
-                    HGroup:
-                        PushButton:
-                            text = "Save Config"
-                            enabled << (app_model.selected.dirty if app_model.selected else False)
-                            style_class << ('save-dirty' if app_model.selected and app_model.selected.dirty else '')
-                            clicked ::
-                                if app_model.selected:
-                                    app_model.selected.save()
-                                    app_model.status_message = f"Saved config for '{app_model.selected_instance}'"
-                            tool_tip = "Save configuration changes to scratch.toml"
-
-                        PushButton:
-                            text = "Cancel Changes"
-                            enabled << (app_model.selected.dirty if app_model.selected else False)
-                            clicked ::
-                                if app_model.selected:
-                                    app_model.selected.revert()
-                                    app_model.init_shared_entries(app_model.selected)
-                                    app_model.status_message = f"Reverted config for '{app_model.selected_instance}'"
-                            tool_tip = "Discard unsaved changes and revert to last saved config"
+                        font = "bold 16pt"
 
                     GroupBox:
                         title = "Actions"
@@ -93,3 +68,29 @@ enamldef InstanceDetailPanel(Container): panel:
                                 clicked ::
                                     app_model.delete_instance(app_model.selected_instance)
                                 tool_tip = "Permanently delete this instance and its files"
+
+                    HGroup:
+                        PushButton:
+                            text = "Save Config"
+                            enabled << (app_model.selected.dirty if app_model.selected else False)
+                            style_class << ('save-dirty' if app_model.selected and app_model.selected.dirty else '')
+                            clicked ::
+                                if app_model.selected:
+                                    app_model.selected.save()
+                                    app_model.status_message = f"Saved config for '{app_model.selected_instance}'"
+                            tool_tip = "Save configuration changes to scratch.toml"
+
+                        PushButton:
+                            text = "Cancel Changes"
+                            enabled << (app_model.selected.dirty if app_model.selected else False)
+                            clicked ::
+                                if app_model.selected:
+                                    app_model.selected.revert()
+                                    app_model.init_shared_entries(app_model.selected)
+                                    app_model.status_message = f"Reverted config for '{app_model.selected_instance}'"
+                            tool_tip = "Discard unsaved changes and revert to last saved config"
+
+                    ConfigEditorPanel:
+                        model << app_model.selected
+                        available_shared << app_model.available_shared
+                        app_model = panel.app_model

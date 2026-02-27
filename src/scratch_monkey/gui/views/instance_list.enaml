@@ -23,6 +23,8 @@ enamldef InstanceListPanel(Container): panel:
                 iterable << app_model.instances
                 PushButton: btn:
                     attr inst = loop_item
+                    checkable = True
+                    checked << (app_model.selected_instance == inst.name)
                     text << (
                         "[running] " if inst.overlay_running
                         else "[built]   " if inst.image_built
