@@ -117,7 +117,9 @@ enamldef ConfigEditorPanel(Container): editor:
                 iterable << (list(range(len(editor.model.volume_entries))) if editor.model else [])
 
                 HGroup:
+                    align_widths = False
                     Field:
+                        hug_width = 'ignore'
                         text << (editor.model.volume_entries[loop.item].host_path if editor.model and loop.item < len(editor.model.volume_entries) else "")
                         text ::
                             if editor.model and loop.item < len(editor.model.volume_entries):
@@ -127,6 +129,7 @@ enamldef ConfigEditorPanel(Container): editor:
                         submit_triggers = ['lost_focus', 'return_pressed', 'auto_sync']
 
                     Field:
+                        hug_width = 'ignore'
                         text << (editor.model.volume_entries[loop.item].container_path if editor.model and loop.item < len(editor.model.volume_entries) else "")
                         text ::
                             if editor.model and loop.item < len(editor.model.volume_entries):
@@ -145,6 +148,8 @@ enamldef ConfigEditorPanel(Container): editor:
 
                     PushButton:
                         text = "X"
+                        minimum_size = (30, 0)
+                        maximum_size = (30, 16777215)
                         clicked ::
                             if editor.model:
                                 editor.model.remove_volume_entry(loop.item)
@@ -164,7 +169,9 @@ enamldef ConfigEditorPanel(Container): editor:
                 iterable << (list(range(len(editor.model.env_vars))) if editor.model else [])
 
                 HGroup:
+                    align_widths = False
                     Field:
+                        hug_width = 'ignore'
                         text << (editor.model.env_vars[loop.item] if editor.model and loop.item < len(editor.model.env_vars) else "")
                         text ::
                             if editor.model and loop.item < len(editor.model.env_vars):
@@ -177,6 +184,8 @@ enamldef ConfigEditorPanel(Container): editor:
 
                     PushButton:
                         text = "X"
+                        minimum_size = (30, 0)
+                        maximum_size = (30, 16777215)
                         clicked ::
                             if editor.model:
                                 editor.model.remove_env_var(loop.item)
@@ -196,7 +205,9 @@ enamldef ConfigEditorPanel(Container): editor:
                 iterable << (list(range(len(editor.model.devices))) if editor.model else [])
 
                 HGroup:
+                    align_widths = False
                     Field:
+                        hug_width = 'ignore'
                         text << (editor.model.devices[loop.item] if editor.model and loop.item < len(editor.model.devices) else "")
                         text ::
                             if editor.model and loop.item < len(editor.model.devices):
@@ -209,6 +220,8 @@ enamldef ConfigEditorPanel(Container): editor:
 
                     PushButton:
                         text = "X"
+                        minimum_size = (30, 0)
+                        maximum_size = (30, 16777215)
                         clicked ::
                             if editor.model:
                                 entries = list(editor.model.devices)
