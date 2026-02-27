@@ -147,7 +147,7 @@ enamldef ConfigEditorPanel(Container): editor:
                                 editor.model.check_dirty()
 
                     PushButton:
-                        text = "X"
+                        text = "\u2717"
                         minimum_size = (30, 0)
                         maximum_size = (30, 16777215)
                         clicked ::
@@ -172,6 +172,7 @@ enamldef ConfigEditorPanel(Container): editor:
                     align_widths = False
                     Field:
                         hug_width = 'ignore'
+                        maximum_size = (150, 16777215)
                         text << (editor.model.env_vars[loop.item].split("=", 1)[0] if editor.model and loop.item < len(editor.model.env_vars) else "")
                         text ::
                             if editor.model and loop.item < len(editor.model.env_vars):
@@ -199,7 +200,7 @@ enamldef ConfigEditorPanel(Container): editor:
                         submit_triggers = ['lost_focus', 'return_pressed', 'auto_sync']
 
                     PushButton:
-                        text = "X"
+                        text = "\u2717"
                         minimum_size = (30, 0)
                         maximum_size = (30, 16777215)
                         clicked ::
@@ -235,7 +236,7 @@ enamldef ConfigEditorPanel(Container): editor:
                         submit_triggers = ['lost_focus', 'return_pressed', 'auto_sync']
 
                     PushButton:
-                        text = "X"
+                        text = "\u2717"
                         minimum_size = (30, 0)
                         maximum_size = (30, 16777215)
                         clicked ::
