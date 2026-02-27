@@ -23,6 +23,9 @@ scratch-monkey-gui = "scratch_monkey.gui.main:gui_cli"
 [tool.hatch.build.targets.wheel]
 packages = ["src/scratch_monkey"]
 
+[tool.hatch.build.targets.wheel.force-include]
+"src/scratch_monkey/gui/icons" = "scratch_monkey/gui/icons"
+
 [tool.ruff]
 line-length = 120
 target-version = "py311"

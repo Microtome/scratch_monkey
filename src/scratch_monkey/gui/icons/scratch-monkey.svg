@@ -1,0 +1,37 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128">
+  <!-- Abstract barrel-of-monkeys style monkey silhouette -->
+  <!-- Round head -->
+  <circle cx="64" cy="32" r="18" fill="#e53935"/>
+  <!-- Ears -->
+  <circle cx="42" cy="28" r="8" fill="#e53935"/>
+  <circle cx="86" cy="28" r="8" fill="#e53935"/>
+  <circle cx="42" cy="28" r="5" fill="#ff7043"/>
+  <circle cx="86" cy="28" r="5" fill="#ff7043"/>
+  <!-- Face detail -->
+  <circle cx="64" cy="34" r="10" fill="#ff7043"/>
+  <!-- Eyes -->
+  <circle cx="58" cy="28" r="3" fill="#fff"/>
+  <circle cx="70" cy="28" r="3" fill="#fff"/>
+  <circle cx="59" cy="28" r="1.5" fill="#212121"/>
+  <circle cx="71" cy="28" r="1.5" fill="#212121"/>
+  <!-- Smile -->
+  <path d="M58 38 Q64 43 70 38" fill="none" stroke="#212121" stroke-width="1.5" stroke-linecap="round"/>
+  <!-- Body -->
+  <ellipse cx="64" cy="68" rx="16" ry="22" fill="#e53935"/>
+  <!-- Left arm - curved hook shape (barrel of monkeys style) -->
+  <path d="M48 58 Q28 54 24 70 Q20 86 32 90" fill="none" stroke="#e53935" stroke-width="8" stroke-linecap="round"/>
+  <!-- Left hand hook -->
+  <path d="M32 90 Q38 94 36 100" fill="none" stroke="#e53935" stroke-width="7" stroke-linecap="round"/>
+  <!-- Right arm - curved hook shape -->
+  <path d="M80 58 Q100 54 104 70 Q108 86 96 90" fill="none" stroke="#e53935" stroke-width="8" stroke-linecap="round"/>
+  <!-- Right hand hook -->
+  <path d="M96 90 Q90 94 92 100" fill="none" stroke="#e53935" stroke-width="7" stroke-linecap="round"/>
+  <!-- Legs -->
+  <path d="M54 86 Q48 100 42 112" fill="none" stroke="#e53935" stroke-width="8" stroke-linecap="round"/>
+  <path d="M74 86 Q80 100 86 112" fill="none" stroke="#e53935" stroke-width="8" stroke-linecap="round"/>
+  <!-- Feet hooks -->
+  <path d="M42 112 Q36 116 38 122" fill="none" stroke="#e53935" stroke-width="7" stroke-linecap="round"/>
+  <path d="M86 112 Q92 116 90 122" fill="none" stroke="#e53935" stroke-width="7" stroke-linecap="round"/>
+  <!-- Tail -->
+  <path d="M64 88 Q76 96 82 104 Q88 112 80 118 Q72 124 68 118" fill="none" stroke="#e53935" stroke-width="5" stroke-linecap="round"/>
+</svg>
