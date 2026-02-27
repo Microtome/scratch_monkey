@@ -460,7 +460,7 @@ class TestAppModelRenameInstance:
 
     def test_rename_success(self, tmp_path):
         """Rename returns '' and updates state on success."""
-        from unittest.mock import MagicMock, patch
+        from unittest.mock import patch
 
         app, instances_dir, project_dir = self._make_app(tmp_path)
 
@@ -469,23 +469,17 @@ class TestAppModelRenameInstance:
             app.create_instance("old")
         app.selected_instance = "old"
 
-        mock_result = MagicMock()
-        mock_result.returncode = 0
-        mock_result.stdout = "Renamed 'old' -> 'new'"
-        mock_result.stderr = ""
-
-        with patch("subprocess.run", return_value=mock_result):
-            with patch("scratch_monkey.gui.models._PROJECT_DIR", project_dir):
-                # Manually rename the directory since subprocess is mocked
-                (instances_dir / "old").rename(instances_dir / "new")
-                err = app.rename_instance("old", "new")
+        with patch("scratch_monkey.gui.models._PROJECT_DIR", project_dir):
+            err = app.rename_instance("old", "new")
 
         assert err == ""
         assert app.selected_instance == "new"
+        assert (instances_dir / "new").is_dir()
+        assert not (instances_dir / "old").is_dir()
 
     def test_rename_updates_selected(self, tmp_path):
         """When renaming the selected instance, selected_instance updates."""
-        from unittest.mock import MagicMock, patch
+        from unittest.mock import patch
 
         app, instances_dir, project_dir = self._make_app(tmp_path)
 
@@ -493,22 +487,15 @@ class TestAppModelRenameInstance:
             app.create_instance("myinst")
         app.selected_instance = "myinst"
 
-        mock_result = MagicMock()
-        mock_result.returncode = 0
-        mock_result.stdout = ""
-        mock_result.stderr = ""
-
-        with patch("subprocess.run", return_value=mock_result):
-            with patch("scratch_monkey.gui.models._PROJECT_DIR", project_dir):
-                (instances_dir / "myinst").rename(instances_dir / "renamed")
-                err = app.rename_instance("myinst", "renamed")
+        with patch("scratch_monkey.gui.models._PROJECT_DIR", project_dir):
+            err = app.rename_instance("myinst", "renamed")
 
         assert err == ""
         assert app.selected_instance == "renamed"
 
     def test_rename_failure_returns_error(self, tmp_path):
         """On failure, returns the error string without changing state."""
-        from unittest.mock import MagicMock, patch
+        from unittest.mock import patch
 
         app, instances_dir, project_dir = self._make_app(tmp_path)
 
@@ -516,14 +503,9 @@ class TestAppModelRenameInstance:
             app.create_instance("myinst")
         app.selected_instance = "myinst"
 
-        mock_result = MagicMock()
-        mock_result.returncode = 1
-        mock_result.stdout = ""
-        mock_result.stderr = "Error: name already exists"
-
-        with patch("subprocess.run", return_value=mock_result):
-            with patch("scratch_monkey.gui.models._PROJECT_DIR", project_dir):
-                err = app.rename_instance("myinst", "bad")
+        # Renaming nonexistent instance should raise an error
+        with patch("scratch_monkey.gui.models._PROJECT_DIR", project_dir):
+            err = app.rename_instance("nonexistent", "whatever")
 
         assert err != ""
         assert app.selected_instance == "myinst"  # unchanged
@@ -553,47 +535,27 @@ class TestAppModelCloneInstance:
 
     def test_clone_success(self, tmp_path):
         """Clone returns '' and selects the clone on success."""
-        from unittest.mock import MagicMock, patch
+        from unittest.mock import patch
 
         app, instances_dir, project_dir = self._make_app(tmp_path)
 
         with patch("scratch_monkey.gui.models._PROJECT_DIR", project_dir):
             app.create_instance("source")
-
-        mock_result = MagicMock()
-        mock_result.returncode = 0
-        mock_result.stdout = ""
-        mock_result.stderr = ""
-
-        with patch("subprocess.run", return_value=mock_result):
-            with patch("scratch_monkey.gui.models._PROJECT_DIR", project_dir):
-                # Manually create the clone dir since subprocess is mocked
-                import shutil
-                shutil.copytree(instances_dir / "source", instances_dir / "dest")
-                err = app.clone_instance("source", "dest")
+            err = app.clone_instance("source", "dest")
 
         assert err == ""
         assert app.selected_instance == "dest"
+        assert (instances_dir / "dest").is_dir()
 
     def test_clone_selects_new_instance(self, tmp_path):
         """After cloning, selected_instance is set to the dest name."""
-        from unittest.mock import MagicMock, patch
+        from unittest.mock import patch
 
         app, instances_dir, project_dir = self._make_app(tmp_path)
 
         with patch("scratch_monkey.gui.models._PROJECT_DIR", project_dir):
             app.create_instance("orig")
-
-        mock_result = MagicMock()
-        mock_result.returncode = 0
-        mock_result.stdout = ""
-        mock_result.stderr = ""
-
-        with patch("subprocess.run", return_value=mock_result):
-            with patch("scratch_monkey.gui.models._PROJECT_DIR", project_dir):
-                import shutil
-                shutil.copytree(instances_dir / "orig", instances_dir / "clone")
-                err = app.clone_instance("orig", "clone")
+            err = app.clone_instance("orig", "clone")
 
         assert err == ""
         assert app.selected_instance == "clone"
@@ -601,22 +563,17 @@ class TestAppModelCloneInstance:
 
     def test_clone_failure_returns_error(self, tmp_path):
         """On failure, returns the error string without changing selected."""
-        from unittest.mock import MagicMock, patch
+        from unittest.mock import patch
 
         app, instances_dir, project_dir = self._make_app(tmp_path)
 
         with patch("scratch_monkey.gui.models._PROJECT_DIR", project_dir):
             app.create_instance("source")
+            app.create_instance("existing")
         app.selected_instance = "source"
 
-        mock_result = MagicMock()
-        mock_result.returncode = 1
-        mock_result.stdout = ""
-        mock_result.stderr = "Error: destination already exists"
-
-        with patch("subprocess.run", return_value=mock_result):
-            with patch("scratch_monkey.gui.models._PROJECT_DIR", project_dir):
-                err = app.clone_instance("source", "existing")
+        with patch("scratch_monkey.gui.models._PROJECT_DIR", project_dir):
+            err = app.clone_instance("source", "existing")
 
         assert err != ""
         assert app.selected_instance == "source"  # unchanged
