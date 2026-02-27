@@ -18,6 +18,14 @@ enamldef InstanceDetailPanel(Container): panel:
             Setter:
                 field = "background"
                 value = "#ff9800"
+        Style:
+            style_class = "instance-title"
+            Setter:
+                field = "font-weight"
+                value = "bold"
+            Setter:
+                field = "font-size"
+                value = "18px"
 
     Conditional:
         condition << app_model.selected_instance == ""
@@ -33,7 +41,7 @@ enamldef InstanceDetailPanel(Container): panel:
                 VGroup:
                     Label:
                         text << f"Instance: {app_model.selected_instance}"
-                        font = "bold 16px sans-serif"
+                        style_class = "instance-title"
 
                     GroupBox:
                         title = "Actions"
