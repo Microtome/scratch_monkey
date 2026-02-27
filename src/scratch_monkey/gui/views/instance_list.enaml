@@ -86,13 +86,11 @@ enamldef InstanceListPanel(Container): panel:
 
     ScrollArea: scroll:
         VGroup:
-            hug_width = 'ignore'
             spacing = 2
             Looper:
                 iterable << app_model.instances
                 HGroup:
                     attr inst = loop_item
-                    hug_width = 'ignore'
                     padding = 0
                     spacing = 2
                     PushButton: btn:
