@@ -20,6 +20,7 @@ from ..instance import (
     detect_base_image,
     is_fedora_based,
     list_all,
+    rename,
     skel_copy,
 )
 from ..overlay import _gpu_devices, ensure_running, exec_shell
@@ -145,6 +146,22 @@ def delete_cmd(ctx: click.Context, name: str, yes: bool) -> None:
         click.echo(f"Error: {e}", err=True)
         sys.exit(1)
     click.echo(f"Deleted instance {name!r}")
+
+
+@cli.command(name="rename")
+@click.argument("old_name")
+@click.argument("new_name")
+@click.pass_context
+def rename_cmd(ctx: click.Context, old_name: str, new_name: str) -> None:
+    """Rename an instance."""
+    instances_dir: Path = ctx.obj["instances_dir"]
+    runner: PodmanRunner = ctx.obj["runner"]
+    try:
+        rename(old_name, new_name, instances_dir, runner)
+    except (InstanceError, ConfigError) as e:
+        click.echo(f"Error: {e}", err=True)
+        sys.exit(1)
+    click.echo(f"Renamed {old_name!r} \u2192 {new_name!r}")
 
 
 @cli.command(name="list")

@@ -4,8 +4,10 @@ from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 import pytest
+from click.testing import CliRunner
 
-from scratch_monkey.config import InstanceConfig, save
+from scratch_monkey.cli.main import cli
+from scratch_monkey.config import ConfigError, InstanceConfig, save
 from scratch_monkey.container import PodmanRunner
 from scratch_monkey.instance import (
     InstanceError,
@@ -15,6 +17,7 @@ from scratch_monkey.instance import (
     detect_base_image,
     is_fedora_based,
     list_all,
+    rename,
 )
 
 
@@ -385,3 +388,121 @@ class TestCloneOverlayId:
         create("source", instances_dir, "scratch_dev", project_dir)
         result = clone("source", "dest", instances_dir)
         assert result.config.overlay_id == ""
+
+
+# ─── rename ───────────────────────────────────────────────────────────────────
+
+
+class TestRename:
+    def _make_instance(self, instances_dir: Path, name: str, project_dir: Path) -> None:
+        """Helper to create a minimal instance directory."""
+        create(name, instances_dir, "scratch_dev", project_dir)
+
+    def test_rename_moves_directory(self, instances_dir, project_dir, mock_runner):
+        """rename() renames the instance directory."""
+        self._make_instance(instances_dir, "old", project_dir)
+        rename("old", "new", instances_dir, mock_runner)
+        assert (instances_dir / "new").is_dir()
+        assert not (instances_dir / "old").exists()
+
+    def test_rename_retags_image(self, instances_dir, project_dir, mock_runner):
+        """rename() calls runner.tag and runner.rmi when the image exists."""
+        self._make_instance(instances_dir, "old", project_dir)
+        mock_runner.image_exists.return_value = True
+        rename("old", "new", instances_dir, mock_runner)
+        mock_runner.tag.assert_called_once_with("old", "new")
+        mock_runner.rmi.assert_called_once_with("old")
+
+    def test_rename_skips_retag_when_no_image(self, instances_dir, project_dir, mock_runner):
+        """rename() skips tag/rmi when no image exists."""
+        self._make_instance(instances_dir, "old", project_dir)
+        mock_runner.image_exists.return_value = False
+        rename("old", "new", instances_dir, mock_runner)
+        mock_runner.tag.assert_not_called()
+        mock_runner.rmi.assert_not_called()
+
+    def test_rename_cleans_up_legacy_overlay(self, instances_dir, project_dir, mock_runner):
+        """rename() removes legacy '{old_name}-overlay' container if present."""
+        self._make_instance(instances_dir, "old", project_dir)
+        mock_runner.container_exists.return_value = True
+        rename("old", "new", instances_dir, mock_runner)
+        mock_runner.container_exists.assert_called_with("old-overlay")
+        mock_runner.remove.assert_called_with("old-overlay", force=True)
+
+    def test_rename_skips_legacy_overlay_when_absent(self, instances_dir, project_dir, mock_runner):
+        """rename() does not call remove when legacy overlay container is absent."""
+        self._make_instance(instances_dir, "old", project_dir)
+        mock_runner.container_exists.return_value = False
+        rename("old", "new", instances_dir, mock_runner)
+        mock_runner.remove.assert_not_called()
+
+    def test_rename_raises_if_old_not_found(self, instances_dir, mock_runner):
+        """rename() raises InstanceError if the source instance does not exist."""
+        with pytest.raises(InstanceError, match="not found"):
+            rename("nonexistent", "new", instances_dir, mock_runner)
+
+    def test_rename_raises_if_new_already_exists(self, instances_dir, project_dir, mock_runner):
+        """rename() raises InstanceError if the destination already exists."""
+        self._make_instance(instances_dir, "old", project_dir)
+        self._make_instance(instances_dir, "new", project_dir)
+        with pytest.raises(InstanceError, match="already exists"):
+            rename("old", "new", instances_dir, mock_runner)
+
+    def test_rename_invalid_name_raises(self, instances_dir, project_dir, mock_runner):
+        """rename() raises ConfigError for an invalid destination name."""
+        self._make_instance(instances_dir, "old", project_dir)
+        with pytest.raises(ConfigError):
+            rename("old", "-invalid", instances_dir, mock_runner)
+
+    def test_rename_returns_instance_from_new_dir(self, instances_dir, project_dir, mock_runner):
+        """rename() returns an Instance with the new name and directory."""
+        self._make_instance(instances_dir, "old", project_dir)
+        inst = rename("old", "new", instances_dir, mock_runner)
+        assert inst.name == "new"
+        assert inst.directory == instances_dir / "new"
+
+    def test_rename_preserves_config(self, instances_dir, project_dir, mock_runner):
+        """rename() preserves the instance config after rename."""
+        from scratch_monkey.config import load
+        self._make_instance(instances_dir, "old", project_dir)
+        # Customize config
+        cfg = InstanceConfig(wayland=True, ssh=True)
+        save(instances_dir / "old" / "scratch.toml", cfg)
+
+        inst = rename("old", "new", instances_dir, mock_runner)
+
+        assert inst.config.wayland is True
+        assert inst.config.ssh is True
+        # Verify config is on disk too
+        saved = load(instances_dir / "new" / "scratch.toml")
+        assert saved.wayland is True
+        assert saved.ssh is True
+
+
+# ─── rename CLI ───────────────────────────────────────────────────────────────
+
+
+class TestRenameCli:
+    def test_rename_cli_success(self, instances_dir, project_dir, mock_runner):
+        """CLI rename prints success message."""
+        create("old", instances_dir, "scratch_dev", project_dir)
+        runner_cli = CliRunner()
+        with patch("scratch_monkey.cli.main.PodmanRunner", return_value=mock_runner):
+            result = runner_cli.invoke(
+                cli,
+                ["--instances-dir", str(instances_dir), "rename", "old", "new"],
+            )
+        assert result.exit_code == 0
+        assert "old" in result.output
+        assert "new" in result.output
+
+    def test_rename_cli_error_not_found(self, instances_dir, mock_runner):
+        """CLI rename prints error and exits non-zero for nonexistent instance."""
+        runner_cli = CliRunner()
+        with patch("scratch_monkey.cli.main.PodmanRunner", return_value=mock_runner):
+            result = runner_cli.invoke(
+                cli,
+                ["--instances-dir", str(instances_dir), "rename", "ghost", "new"],
+            )
+        assert result.exit_code != 0
+        assert "Error" in result.output or "Error" in (result.stderr or "")

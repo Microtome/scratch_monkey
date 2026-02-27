@@ -125,6 +125,10 @@ class PodmanRunner:
         """Remove an image."""
         self._run(["rmi", image])
 
+    def tag(self, source: str, target: str) -> None:
+        """Tag an image with a new name."""
+        self._run(["tag", source, target])
+
     def build(
         self,
         tag: str,

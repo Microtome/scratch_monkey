@@ -114,6 +114,32 @@ class TestRmi:
                 runner.rmi("missing")
 
 
+class TestTag:
+    def test_tag(self, runner):
+        """tag() calls podman tag with source and target."""
+        with patch("subprocess.run", return_value=make_result(0)) as mock_run:
+            runner.tag("oldimage", "newimage")
+            args = mock_run.call_args[0][0]
+            assert "tag" in args
+            assert "oldimage" in args
+            assert "newimage" in args
+
+    def test_tag_order(self, runner):
+        """tag() passes source before target."""
+        with patch("subprocess.run", return_value=make_result(0)) as mock_run:
+            runner.tag("source:latest", "target:latest")
+            args = mock_run.call_args[0][0]
+            source_idx = args.index("source:latest")
+            target_idx = args.index("target:latest")
+            assert source_idx < target_idx
+
+    def test_tag_raises_on_failure(self, runner):
+        """tag() raises PodmanError if podman exits non-zero."""
+        with patch("subprocess.run", return_value=make_result(1, stderr="image not known")):
+            with pytest.raises(PodmanError):
+                runner.tag("missing", "target")
+
+
 class TestBuild:
     def test_calls_build_with_tag_and_context(self, runner):
         with patch("subprocess.run", return_value=make_result(0)) as mock_run:
