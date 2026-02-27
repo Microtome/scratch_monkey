@@ -95,9 +95,14 @@ class PodmanRunner:
         """Run `podman exec <container> <exec_args>` and return the result."""
         return self._run(["exec", container, *exec_args], capture=False)
 
-    def exec_capture(self, container: str, exec_args: list[str]) -> str:
+    def exec_capture(self, container: str, exec_args: list[str], *, user: str | None = None) -> str:
         """Run `podman exec` and return captured stdout."""
-        result = self._run(["exec", container, *exec_args])
+        cmd = ["exec"]
+        if user:
+            cmd += ["--user", user]
+        cmd.append(container)
+        cmd.extend(exec_args)
+        result = self._run(cmd)
         return result.stdout
 
     def start(self, name: str) -> None:

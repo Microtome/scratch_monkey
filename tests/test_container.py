@@ -137,6 +137,44 @@ class TestBuild:
                 runner.build("tag", "ctx")
 
 
+class TestExecCapture:
+    def test_basic_exec_capture(self, runner):
+        with patch("subprocess.run", return_value=make_result(0, stdout="output\n")) as mock_run:
+            result = runner.exec_capture("mycontainer", ["ls", "/"])
+            assert result == "output\n"
+            args = mock_run.call_args[0][0]
+            assert "exec" in args
+            assert "mycontainer" in args
+            assert "ls" in args
+            assert "--user" not in args
+
+    def test_exec_capture_with_user(self, runner):
+        with patch("subprocess.run", return_value=make_result(0, stdout="ok\n")) as mock_run:
+            result = runner.exec_capture("mycontainer", ["id"], user="root")
+            assert result == "ok\n"
+            args = mock_run.call_args[0][0]
+            assert "exec" in args
+            assert "--user" in args
+            user_idx = args.index("--user")
+            assert args[user_idx + 1] == "root"
+            assert "mycontainer" in args
+            assert "id" in args
+
+    def test_exec_capture_user_before_container(self, runner):
+        """--user root must appear before container name in command."""
+        with patch("subprocess.run", return_value=make_result(0, stdout="")) as mock_run:
+            runner.exec_capture("mycontainer", ["whoami"], user="root")
+            args = mock_run.call_args[0][0]
+            user_idx = args.index("--user")
+            container_idx = args.index("mycontainer")
+            assert user_idx < container_idx
+
+    def test_exec_capture_raises_on_failure(self, runner):
+        with patch("subprocess.run", return_value=make_result(1, stderr="failed")):
+            with pytest.raises(PodmanError):
+                runner.exec_capture("mycontainer", ["bad-cmd"])
+
+
 class TestRunDaemon:
     def test_calls_run_with_daemon_args(self, runner):
         with patch("subprocess.run", return_value=make_result(0)) as mock_run:

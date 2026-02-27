@@ -158,25 +158,29 @@ class TestSetupFedoraUser:
         mock_runner.exec_capture.side_effect = [
             "",  # sudo install
             PodmanError("useradd: user exists"),  # useradd
-            "",  # chown
             "",  # sudoers
         ]
         with patch.dict(os.environ, {"USER": "testuser"}):
             _setup_fedora_user("mycontainer", mock_runner)  # should not raise
 
-    def test_chowns_home_directory(self, mock_runner):
-        """Home directory must be chowned to the created user."""
+    def test_exec_capture_called_with_user_root(self, mock_runner):
+        """All exec_capture calls must use user='root' for privileged setup."""
+        mock_runner.exec_capture.return_value = ""
+        with patch.dict(os.environ, {"USER": "testuser"}):
+            _setup_fedora_user("mycontainer", mock_runner)
+        for call in mock_runner.exec_capture.call_args_list:
+            assert call.kwargs.get("user") == "root", (
+                f"exec_capture must be called with user='root', got: {call}"
+            )
+
+    def test_no_chown_called(self, mock_runner):
+        """chown must NOT be called — --userns=keep-id handles ownership."""
         mock_runner.exec_capture.return_value = ""
         with patch.dict(os.environ, {"USER": "testuser"}):
             _setup_fedora_user("mycontainer", mock_runner)
         all_calls = mock_runner.exec_capture.call_args_list
-        # Find the chown call
-        uid = os.getuid()
-        chown_called = any(
-            call[0][1] == ["chown", f"{uid}:{uid}", "/home/testuser"]
-            for call in all_calls
-        )
-        assert chown_called, "chown with correct uid and home path must be called"
+        chown_called = any("chown" in str(c) for c in all_calls)
+        assert not chown_called, "chown must not be called when --userns=keep-id is used"
 
 
 # ─── exec_shell ───────────────────────────────────────────────────────────────
@@ -255,6 +259,21 @@ class TestGpuDevices:
         assert "/dev/dri" in devices
         assert "/dev/kfd" in devices
         assert "/dev/nvidia0" in devices
+
+
+# ─── _build_run_args userns ───────────────────────────────────────────────────
+
+
+class TestBuildRunArgsUserns:
+    def test_userns_keep_id_in_scratch_args(self, scratch_instance):
+        """--userns=keep-id must appear in run args for scratch instances."""
+        args = _build_run_args(scratch_instance)
+        assert "--userns=keep-id" in args
+
+    def test_userns_keep_id_in_fedora_args(self, fedora_instance):
+        """--userns=keep-id must appear in run args for fedora instances."""
+        args = _build_run_args(fedora_instance)
+        assert "--userns=keep-id" in args
 
 
 # ─── _build_run_args gpu + devices ────────────────────────────────────────────
