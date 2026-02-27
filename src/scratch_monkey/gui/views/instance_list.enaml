@@ -95,6 +95,7 @@ enamldef InstanceListPanel(Container): panel:
                     PushButton: btn:
                         checkable = True
                         checked << (app_model.selected_instance == inst.name)
+                        hug_width = 'ignore'
                         text << (
                             "[running] " if inst.overlay_running
                             else "[built]   " if inst.image_built
@@ -115,6 +116,7 @@ enamldef InstanceListPanel(Container): panel:
 
                     PushButton:
                         text = "\u29C9"
+                        minimum_size = (30, 0)
                         maximum_size = (30, 16777215)
                         tool_tip = "Clone this instance"
                         clicked ::
@@ -123,6 +125,7 @@ enamldef InstanceListPanel(Container): panel:
 
                     PushButton:
                         text = "\u270E"
+                        minimum_size = (30, 0)
                         maximum_size = (30, 16777215)
                         tool_tip = "Rename this instance"
                         clicked ::
@@ -131,6 +134,7 @@ enamldef InstanceListPanel(Container): panel:
 
                     PushButton:
                         text = "\u2717"
+                        minimum_size = (30, 0)
                         maximum_size = (30, 16777215)
                         tool_tip = "Delete this instance"
                         clicked ::

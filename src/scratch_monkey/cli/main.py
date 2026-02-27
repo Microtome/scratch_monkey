@@ -158,7 +158,7 @@ def rename_cmd(ctx: click.Context, old_name: str, new_name: str) -> None:
     runner: PodmanRunner = ctx.obj["runner"]
     try:
         rename(old_name, new_name, instances_dir, runner)
-    except (InstanceError, ConfigError) as e:
+    except (InstanceError, ConfigError, PodmanError) as e:
         click.echo(f"Error: {e}", err=True)
         sys.exit(1)
     click.echo(f"Renamed {old_name!r} \u2192 {new_name!r}")

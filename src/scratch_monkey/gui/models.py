@@ -16,7 +16,8 @@ except ImportError:
 
 from ..config import ConfigError, InstanceConfig, save
 from ..container import PodmanRunner
-from ..instance import InstanceError, InstanceInfo, create, list_all, skel_copy
+from ..instance import Instance, InstanceError, InstanceInfo, clone, create, delete, list_all, rename, skel_copy
+from ..overlay import reset as overlay_reset
 from ..shared import list_shared, parse_shared_entry
 
 _PROJECT_DIR = Path(__file__).parent.parent.parent.parent
@@ -304,14 +305,18 @@ class AppModel(Atom):
 
     def reset_overlay(self, name: str) -> None:
         """Remove the overlay container for the named instance."""
+        instances_dir = Path(self.instances_dir)
+        inst_dir = instances_dir / name
+        if not inst_dir.is_dir():
+            self.status_message = f"Instance {name!r} not found"
+            return
+        inst = Instance.from_directory(inst_dir)
         try:
-            result = subprocess.run(
-                ["scratch-monkey", "reset", name, "--yes"],
-                capture_output=True,
-                text=True,
-            )
-            msg = result.stdout.strip() or result.stderr.strip()
-            self.status_message = msg or f"Reset overlay for {name!r}"
+            removed = overlay_reset(inst, self._runner)
+            if removed:
+                self.status_message = f"Overlay container for {name!r} removed."
+            else:
+                self.status_message = f"No overlay container found for {name!r}"
         except Exception as e:
             self.status_message = f"Error: {e}"
         self.refresh()
@@ -319,15 +324,9 @@ class AppModel(Atom):
     def delete_instance(self, name: str) -> None:
         """Delete the named instance (no confirmation — caller must confirm)."""
         try:
-            result = subprocess.run(
-                ["scratch-monkey", "delete", name, "--yes"],
-                capture_output=True,
-                text=True,
-            )
-            msg = result.stdout.strip() or result.stderr.strip()
-            self.status_message = msg or f"Deleted {name!r}"
-            if result.returncode == 0:
-                self.selected_instance = ""
+            delete(name, Path(self.instances_dir), self._runner)
+            self.status_message = f"Deleted {name!r}"
+            self.selected_instance = ""
         except Exception as e:
             self.status_message = f"Error: {e}"
         self.refresh()
@@ -335,13 +334,7 @@ class AppModel(Atom):
     def rename_instance(self, old_name: str, new_name: str) -> str:
         """Rename an instance. Returns '' on success or error string."""
         try:
-            result = subprocess.run(
-                ["scratch-monkey", "rename", old_name, new_name],
-                capture_output=True,
-                text=True,
-            )
-            if result.returncode != 0:
-                return result.stderr.strip() or f"Rename failed (exit {result.returncode})"
+            rename(old_name, new_name, Path(self.instances_dir), self._runner)
             self.status_message = f"Renamed {old_name!r} to {new_name!r}"
             if self.selected_instance == old_name:
                 self.selected_instance = new_name
@@ -353,13 +346,7 @@ class AppModel(Atom):
     def clone_instance(self, source: str, dest: str) -> str:
         """Clone an instance. Returns '' on success or error string."""
         try:
-            result = subprocess.run(
-                ["scratch-monkey", "clone", source, dest],
-                capture_output=True,
-                text=True,
-            )
-            if result.returncode != 0:
-                return result.stderr.strip() or f"Clone failed (exit {result.returncode})"
+            clone(source, dest, Path(self.instances_dir))
             self.status_message = f"Cloned {source!r} to {dest!r}"
             self.selected_instance = dest
         except Exception as e:

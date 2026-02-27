@@ -33,7 +33,7 @@ enamldef InstanceDetailPanel(Container): panel:
                 VGroup:
                     Label:
                         text << f"Instance: {app_model.selected_instance}"
-                        font = "bold 16pt"
+                        font = "bold 16px"
 
                     GroupBox:
                         title = "Actions"
