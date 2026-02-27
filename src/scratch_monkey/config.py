@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import os
 import re
+import secrets
 import tempfile
 import tomllib
 from dataclasses import dataclass, field
@@ -18,6 +19,11 @@ _NAME_RE = re.compile(r"^[a-zA-Z0-9][a-zA-Z0-9_.\-]*$")
 
 class ConfigError(Exception):
     """Raised for config validation or parse errors."""
+
+
+def generate_overlay_id() -> str:
+    """Generate a unique overlay container ID like 'sm-a1b2c3d4'."""
+    return f"sm-{secrets.token_hex(4)}"
 
 
 def validate_name(name: str) -> None:
@@ -44,6 +50,7 @@ class InstanceConfig:
     overlay: bool = False
     gpu: bool = False
     devices: list[str] = field(default_factory=list)
+    overlay_id: str = ""
 
 
 def load(path: Path) -> InstanceConfig:
@@ -81,6 +88,7 @@ def load(path: Path) -> InstanceConfig:
         overlay=_bool(data.get("overlay", False)),
         gpu=_bool(data.get("gpu", False)),
         devices=_strlist(data.get("devices", [])),
+        overlay_id=str(data.get("overlay_id", "")),
     )
 
 
@@ -132,5 +140,7 @@ def _serialize(config: InstanceConfig) -> str:
     lines.append(f"overlay = {str(config.overlay).lower()}\n")
     lines.append(f"gpu = {str(config.gpu).lower()}\n")
     lines.append(f"devices = {_toml_strlist(config.devices)}\n")
+    if config.overlay_id:
+        lines.append(f"overlay_id = {_toml_str(config.overlay_id)}\n")
 
     return "".join(lines)

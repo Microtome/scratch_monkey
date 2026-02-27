@@ -5,6 +5,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
+from scratch_monkey.config import InstanceConfig, save
 from scratch_monkey.container import PodmanRunner
 from scratch_monkey.instance import (
     InstanceError,
@@ -291,3 +292,96 @@ class TestIsFedoraBased:
             "FROM fedora:latest AS builder\nRUN echo hi\nFROM scratch_dev\n"
         )
         assert is_fedora_based(tmp_path) is False
+
+
+# ─── overlay_id in delete ─────────────────────────────────────────────────────
+
+
+class TestDeleteOverlayId:
+    def _make_instance(self, instances_dir, overlay_id: str = "") -> None:
+        """Create a minimal instance dir with a given overlay_id in config."""
+        inst_dir = instances_dir / "myproject"
+        inst_dir.mkdir(parents=True)
+        (inst_dir / "home").mkdir()
+        (inst_dir / "Dockerfile").write_text("FROM scratch_dev\n")
+        (inst_dir / ".env").touch()
+        cfg = InstanceConfig(overlay_id=overlay_id)
+        save(inst_dir / "scratch.toml", cfg)
+
+    def test_delete_uses_overlay_id(self, instances_dir, mock_runner):
+        """delete() checks the overlay_id container name when overlay_id is set."""
+        self._make_instance(instances_dir, overlay_id="sm-deadbeef")
+        mock_runner.container_exists.return_value = True
+        delete("myproject", instances_dir, mock_runner)
+        mock_runner.container_exists.assert_called_with("sm-deadbeef")
+        mock_runner.remove.assert_called_with("sm-deadbeef", force=True)
+
+    def test_delete_falls_back_to_legacy_name(self, instances_dir, mock_runner):
+        """delete() falls back to '{name}-overlay' when overlay_id is empty."""
+        self._make_instance(instances_dir, overlay_id="")
+        mock_runner.container_exists.return_value = True
+        delete("myproject", instances_dir, mock_runner)
+        mock_runner.container_exists.assert_called_with("myproject-overlay")
+        mock_runner.remove.assert_called_with("myproject-overlay", force=True)
+
+
+# ─── overlay_id in list_all ───────────────────────────────────────────────────
+
+
+class TestListAllOverlayId:
+    def test_list_all_uses_overlay_id(self, instances_dir, mock_runner):
+        """list_all() checks overlay_id container when overlay_id is set."""
+        inst_dir = instances_dir / "testinst"
+        inst_dir.mkdir()
+        (inst_dir / "home").mkdir()
+        (inst_dir / "Dockerfile").write_text("FROM scratch_dev\n")
+        (inst_dir / ".env").touch()
+        cfg = InstanceConfig(overlay_id="sm-cafebabe")
+        save(inst_dir / "scratch.toml", cfg)
+
+        mock_runner.container_running.return_value = True
+        result = list_all(instances_dir, mock_runner)
+
+        assert len(result) == 1
+        mock_runner.container_running.assert_called_with("sm-cafebabe")
+
+    def test_list_all_falls_back_to_legacy_name(self, instances_dir, mock_runner):
+        """list_all() falls back to '{name}-overlay' when overlay_id is empty."""
+        inst_dir = instances_dir / "testinst"
+        inst_dir.mkdir()
+        (inst_dir / "home").mkdir()
+        (inst_dir / "Dockerfile").write_text("FROM scratch_dev\n")
+        (inst_dir / ".env").touch()
+        cfg = InstanceConfig(overlay_id="")
+        save(inst_dir / "scratch.toml", cfg)
+
+        mock_runner.container_running.return_value = False
+        list_all(instances_dir, mock_runner)
+
+        mock_runner.container_running.assert_called_with("testinst-overlay")
+
+
+# ─── overlay_id in clone ──────────────────────────────────────────────────────
+
+
+class TestCloneOverlayId:
+    def test_clone_clears_overlay_id(self, instances_dir, project_dir, mock_runner):
+        """Cloning an instance with overlay_id set results in empty overlay_id on clone."""
+        # Create source with overlay_id
+        create("source", instances_dir, "scratch_dev", project_dir)
+        src_cfg = InstanceConfig(overlay_id="sm-original")
+        save(instances_dir / "source" / "scratch.toml", src_cfg)
+
+        result = clone("source", "dest", instances_dir)
+
+        assert result.config.overlay_id == ""
+        # Verify it's also persisted on disk
+        from scratch_monkey.config import load
+        saved = load(instances_dir / "dest" / "scratch.toml")
+        assert saved.overlay_id == ""
+
+    def test_clone_without_overlay_id_stays_empty(self, instances_dir, project_dir):
+        """Cloning an instance without overlay_id keeps it empty."""
+        create("source", instances_dir, "scratch_dev", project_dir)
+        result = clone("source", "dest", instances_dir)
+        assert result.config.overlay_id == ""

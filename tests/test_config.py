@@ -1,12 +1,15 @@
 """Tests for scratch_monkey.config module."""
 
 
+import re
+
 import pytest
 
 from scratch_monkey.config import (
     ConfigError,
     InstanceConfig,
     _serialize,
+    generate_overlay_id,
     load,
     save,
     validate_name,
@@ -233,3 +236,51 @@ class TestSerialize:
     def test_escapes_quotes_in_strings(self):
         text = _serialize(InstanceConfig(cmd='/bin/bash -c "echo hi"'))
         assert '\\"' in text
+
+
+# ─── generate_overlay_id ──────────────────────────────────────────────────────
+
+
+class TestGenerateOverlayId:
+    def test_format(self):
+        """overlay_id must match 'sm-' followed by exactly 8 hex chars."""
+        oid = generate_overlay_id()
+        assert re.fullmatch(r"sm-[0-9a-f]{8}", oid), f"Bad format: {oid!r}"
+
+    def test_unique(self):
+        """Two generated IDs must differ."""
+        assert generate_overlay_id() != generate_overlay_id()
+
+
+# ─── overlay_id round-trip ────────────────────────────────────────────────────
+
+
+class TestOverlayIdConfig:
+    def test_load_overlay_id(self, tmp_path):
+        toml = tmp_path / "scratch.toml"
+        toml.write_text('overlay_id = "sm-abcd1234"\n')
+        cfg = load(toml)
+        assert cfg.overlay_id == "sm-abcd1234"
+
+    def test_load_missing_overlay_id_defaults_empty(self, tmp_path):
+        toml = tmp_path / "scratch.toml"
+        toml.write_text("")
+        cfg = load(toml)
+        assert cfg.overlay_id == ""
+
+    def test_serialize_includes_overlay_id_when_set(self):
+        cfg = InstanceConfig(overlay_id="sm-deadbeef")
+        text = _serialize(cfg)
+        assert 'overlay_id = "sm-deadbeef"' in text
+
+    def test_serialize_omits_overlay_id_when_empty(self):
+        cfg = InstanceConfig(overlay_id="")
+        text = _serialize(cfg)
+        assert "overlay_id" not in text
+
+    def test_roundtrip_with_overlay_id(self, tmp_path):
+        path = tmp_path / "scratch.toml"
+        cfg = InstanceConfig(overlay_id="sm-12345678")
+        save(path, cfg)
+        loaded = load(path)
+        assert loaded.overlay_id == "sm-12345678"

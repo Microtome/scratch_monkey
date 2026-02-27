@@ -122,6 +122,9 @@ def clone(source: str, dest: str, instances_dir: Path) -> Instance:
         (dst_dir / ".env").touch()
 
     config = load(dst_dir / "scratch.toml")
+    if config.overlay_id:
+        config.overlay_id = ""
+        save(dst_dir / "scratch.toml", config)
     home_dir = dst_dir / "home"
     return Instance(name=dest, directory=dst_dir, config=config, home_dir=home_dir)
 
@@ -138,7 +141,8 @@ def delete(name: str, instances_dir: Path, runner: PodmanRunner) -> None:
         raise InstanceError(f"Instance {name!r} not found at {instance_dir}")
 
     # Remove overlay container if it exists
-    overlay_name = f"{name}-overlay"
+    cfg = load(instance_dir / "scratch.toml")
+    overlay_name = cfg.overlay_id if cfg.overlay_id else f"{name}-overlay"
     if runner.container_exists(overlay_name):
         runner.remove(overlay_name, force=True)
 
@@ -174,7 +178,8 @@ def list_all(instances_dir: Path, runner: PodmanRunner) -> list[InstanceInfo]:
         config_path = entry / "scratch.toml"
         config = load(config_path)
         image_built = runner.image_exists(entry.name)
-        overlay_running = runner.container_running(f"{entry.name}-overlay")
+        overlay_name = config.overlay_id if config.overlay_id else f"{entry.name}-overlay"
+        overlay_running = runner.container_running(overlay_name)
         results.append(
             InstanceInfo(
                 name=entry.name,
