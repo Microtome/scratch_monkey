@@ -859,3 +859,81 @@ class TestAppModelExportCommand:
             err = app.export_command("myinst", "/usr/bin/rg")
 
         assert err == "disk full"
+
+
+class TestAppModelEditFile:
+    """Tests for AppModel.edit_file()."""
+
+    def _make_app(self, tmp_path):
+        from unittest.mock import MagicMock, patch
+
+        instances_dir = tmp_path / "scratch-monkey"
+        instances_dir.mkdir()
+
+        runner = MagicMock()
+        runner.container_exists.return_value = False
+        runner.container_running.return_value = False
+        runner.image_exists.return_value = False
+
+        project_dir = tmp_path / "project"
+        project_dir.mkdir()
+
+        with patch("scratch_monkey.gui.models._PROJECT_DIR", project_dir):
+            app = AppModel(instances_dir=instances_dir, runner=runner)
+
+        return app, instances_dir, project_dir
+
+    def test_edit_dockerfile_success(self, tmp_path):
+        """edit_file opens Dockerfile in editor and sets status."""
+        from unittest.mock import patch
+
+        app, instances_dir, project_dir = self._make_app(tmp_path)
+
+        with patch("scratch_monkey.gui.models._PROJECT_DIR", project_dir):
+            app.create_instance("myinst")
+
+        with patch("scratch_monkey.gui.models._open_in_editor", return_value="") as mock_edit:
+            app.edit_file("myinst", "dockerfile")
+
+        mock_edit.assert_called_once()
+        called_path = mock_edit.call_args[0][0]
+        assert called_path == instances_dir / "myinst" / "Dockerfile"
+        assert "Editing dockerfile" in app.status_message
+
+    def test_edit_env_success(self, tmp_path):
+        """edit_file opens .env in editor and sets status."""
+        from unittest.mock import patch
+
+        app, instances_dir, project_dir = self._make_app(tmp_path)
+
+        with patch("scratch_monkey.gui.models._PROJECT_DIR", project_dir):
+            app.create_instance("myinst")
+
+        with patch("scratch_monkey.gui.models._open_in_editor", return_value="") as mock_edit:
+            app.edit_file("myinst", "env")
+
+        mock_edit.assert_called_once()
+        called_path = mock_edit.call_args[0][0]
+        assert called_path == instances_dir / "myinst" / ".env"
+        assert "Editing env" in app.status_message
+
+    def test_edit_file_not_found(self, tmp_path):
+        """edit_file sets error status for nonexistent instance."""
+        app, instances_dir, project_dir = self._make_app(tmp_path)
+
+        app.edit_file("nonexistent", "dockerfile")
+        assert "not found" in app.status_message
+
+    def test_edit_file_editor_error(self, tmp_path):
+        """edit_file propagates editor error to status_message."""
+        from unittest.mock import patch
+
+        app, instances_dir, project_dir = self._make_app(tmp_path)
+
+        with patch("scratch_monkey.gui.models._PROJECT_DIR", project_dir):
+            app.create_instance("myinst")
+
+        with patch("scratch_monkey.gui.models._open_in_editor", return_value="No terminal emulator found."):
+            app.edit_file("myinst", "dockerfile")
+
+        assert "No terminal emulator found." in app.status_message

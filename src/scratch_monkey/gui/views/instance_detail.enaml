@@ -126,6 +126,18 @@ enamldef InstanceDetailPanel(Container): panel:
                                     dlg.exec_()
                                 tool_tip = "Export a command from this instance to ~/.local/bin"
 
+                            PushButton:
+                                text = "Edit Dockerfile"
+                                clicked ::
+                                    app_model.edit_file(app_model.selected_instance, "dockerfile")
+                                tool_tip = "Open the Dockerfile in your editor ($VISUAL/$EDITOR)"
+
+                            PushButton:
+                                text = "Edit .env"
+                                clicked ::
+                                    app_model.edit_file(app_model.selected_instance, "env")
+                                tool_tip = "Open the .env file in your editor ($VISUAL/$EDITOR)"
+
                     HGroup:
                         PushButton:
                             text = "Save Config"
