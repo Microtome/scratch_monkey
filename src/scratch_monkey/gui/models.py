@@ -332,6 +332,41 @@ class AppModel(Atom):
             self.status_message = f"Error: {e}"
         self.refresh()
 
+    def rename_instance(self, old_name: str, new_name: str) -> str:
+        """Rename an instance. Returns '' on success or error string."""
+        try:
+            result = subprocess.run(
+                ["scratch-monkey", "rename", old_name, new_name],
+                capture_output=True,
+                text=True,
+            )
+            if result.returncode != 0:
+                return result.stderr.strip() or f"Rename failed (exit {result.returncode})"
+            self.status_message = f"Renamed {old_name!r} to {new_name!r}"
+            if self.selected_instance == old_name:
+                self.selected_instance = new_name
+        except Exception as e:
+            return str(e)
+        self.refresh()
+        return ""
+
+    def clone_instance(self, source: str, dest: str) -> str:
+        """Clone an instance. Returns '' on success or error string."""
+        try:
+            result = subprocess.run(
+                ["scratch-monkey", "clone", source, dest],
+                capture_output=True,
+                text=True,
+            )
+            if result.returncode != 0:
+                return result.stderr.strip() or f"Clone failed (exit {result.returncode})"
+            self.status_message = f"Cloned {source!r} to {dest!r}"
+            self.selected_instance = dest
+        except Exception as e:
+            return str(e)
+        self.refresh()
+        return ""
+
     def new_instance_model(self) -> InstanceModel:
         """Create a fresh InstanceModel with shared entries initialized."""
         m = InstanceModel()
