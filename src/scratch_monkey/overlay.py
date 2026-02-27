@@ -178,6 +178,16 @@ def _setup_fedora_user(container_name: str, runner: PodmanRunner) -> None:
     except PodmanError:
         pass  # user may already exist
 
+    # Ensure home directory is owned by the user
+    container_home = f"/home/{username}"
+    try:
+        runner.exec_capture(
+            container_name,
+            ["chown", f"{uid}:{uid}", container_home],
+        )
+    except PodmanError:
+        pass  # best-effort
+
     # Grant passwordless sudo
     sudoers_line = f"{username} ALL=(ALL) NOPASSWD: ALL"
     runner.exec_capture(
