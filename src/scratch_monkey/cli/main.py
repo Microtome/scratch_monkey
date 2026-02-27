@@ -20,6 +20,7 @@ from ..instance import (
     detect_base_image,
     is_fedora_based,
     list_all,
+    rename,
     skel_copy,
 )
 from ..overlay import _gpu_devices, ensure_running, exec_shell
@@ -112,9 +113,10 @@ def create_cmd(ctx: click.Context, name: str, fedora: bool, skel: bool) -> None:
 def clone_cmd(ctx: click.Context, source: str, dest: str) -> None:
     """Clone an existing instance (fresh home directory)."""
     instances_dir: Path = ctx.obj["instances_dir"]
+    runner: PodmanRunner = ctx.obj["runner"]
     try:
-        clone(source, dest, instances_dir)
-    except (InstanceError, ConfigError) as e:
+        clone(source, dest, instances_dir, runner)
+    except (InstanceError, ConfigError, PodmanError) as e:
         click.echo(f"Error: {e}", err=True)
         sys.exit(1)
     click.echo(f"Cloned {source!r} → {dest!r} (fresh home directory)")
@@ -145,6 +147,22 @@ def delete_cmd(ctx: click.Context, name: str, yes: bool) -> None:
         click.echo(f"Error: {e}", err=True)
         sys.exit(1)
     click.echo(f"Deleted instance {name!r}")
+
+
+@cli.command(name="rename")
+@click.argument("old_name")
+@click.argument("new_name")
+@click.pass_context
+def rename_cmd(ctx: click.Context, old_name: str, new_name: str) -> None:
+    """Rename an instance."""
+    instances_dir: Path = ctx.obj["instances_dir"]
+    runner: PodmanRunner = ctx.obj["runner"]
+    try:
+        rename(old_name, new_name, instances_dir, runner)
+    except (InstanceError, ConfigError, PodmanError) as e:
+        click.echo(f"Error: {e}", err=True)
+        sys.exit(1)
+    click.echo(f"Renamed {old_name!r} \u2192 {new_name!r}")
 
 
 @cli.command(name="list")
@@ -326,7 +344,8 @@ def reset(ctx: click.Context, name: str, yes: bool) -> None:
     runner: PodmanRunner = ctx.obj["runner"]
     inst = _get_instance(instances_dir, name)
 
-    if not runner.container_exists(f"{name}-overlay"):
+    overlay_name = inst.config.overlay_id or f"{name}-overlay"
+    if not runner.container_exists(overlay_name):
         click.echo(f"No overlay container found for {name!r}")
         return
 

@@ -5,6 +5,7 @@ from __future__ import annotations
 import os
 import sys
 
+from .config import generate_overlay_id, save
 from .container import PodmanError, PodmanRunner
 from .instance import Instance, is_fedora_based
 from .shared import parse_shared_entry
@@ -30,7 +31,10 @@ def _gpu_devices() -> list[str]:
 
 
 def _overlay_name(instance: Instance) -> str:
-    return f"{instance.name}-overlay"
+    if not instance.config.overlay_id:
+        instance.config.overlay_id = generate_overlay_id()
+        save(instance.directory / "scratch.toml", instance.config)
+    return instance.config.overlay_id
 
 
 def _build_run_args(instance: Instance) -> list[str]:

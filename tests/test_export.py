@@ -89,6 +89,24 @@ class TestExportCommand:
         export_command(instance, "/usr/bin/git", bin_dir=new_bin_dir)
         assert new_bin_dir.exists()
 
+    def test_export_uses_overlay_id(self, tmp_path, bin_dir):
+        """When overlay_id is set, the exported script uses it instead of '{name}-overlay'."""
+        inst_dir = tmp_path / "myinstance"
+        inst_dir.mkdir()
+        home_dir = inst_dir / "home"
+        home_dir.mkdir()
+        (inst_dir / "Dockerfile").write_text("FROM scratch_dev\n")
+        inst = Instance(
+            name="myinstance",
+            directory=inst_dir,
+            config=InstanceConfig(overlay_id="sm-abcd1234"),
+            home_dir=home_dir,
+        )
+        out = export_command(inst, "/usr/bin/git", bin_dir=bin_dir)
+        content = out.read_text()
+        assert "sm-abcd1234" in content
+        assert "myinstance-overlay" not in content
+
 
 # ─── unexport ─────────────────────────────────────────────────────────────────
 

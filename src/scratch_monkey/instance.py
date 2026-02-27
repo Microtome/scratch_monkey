@@ -94,10 +94,11 @@ def create(
     return Instance(name=name, directory=instance_dir, config=config, home_dir=home_dir)
 
 
-def clone(source: str, dest: str, instances_dir: Path) -> Instance:
+def clone(source: str, dest: str, instances_dir: Path, runner: PodmanRunner | None = None) -> Instance:
     """Clone an existing instance (copies Dockerfile + config, fresh home/).
 
     Raises InstanceError if source doesn't exist or dest already exists.
+    If a runner is provided and the source has a built image, tags it for the dest.
     """
     validate_name(dest)
     instances_dir = Path(instances_dir)
@@ -122,6 +123,13 @@ def clone(source: str, dest: str, instances_dir: Path) -> Instance:
         (dst_dir / ".env").touch()
 
     config = load(dst_dir / "scratch.toml")
+    if config.overlay_id:
+        config.overlay_id = ""
+        save(dst_dir / "scratch.toml", config)
+
+    if runner is not None and runner.image_exists(source):
+        runner.tag(source, dest)
+
     home_dir = dst_dir / "home"
     return Instance(name=dest, directory=dst_dir, config=config, home_dir=home_dir)
 
@@ -138,7 +146,8 @@ def delete(name: str, instances_dir: Path, runner: PodmanRunner) -> None:
         raise InstanceError(f"Instance {name!r} not found at {instance_dir}")
 
     # Remove overlay container if it exists
-    overlay_name = f"{name}-overlay"
+    cfg = load(instance_dir / "scratch.toml")
+    overlay_name = cfg.overlay_id if cfg.overlay_id else f"{name}-overlay"
     if runner.container_exists(overlay_name):
         runner.remove(overlay_name, force=True)
 
@@ -146,6 +155,39 @@ def delete(name: str, instances_dir: Path, runner: PodmanRunner) -> None:
         runner.rmi(name)
 
     shutil.rmtree(instance_dir)
+
+
+def rename(old_name: str, new_name: str, instances_dir: Path, runner: PodmanRunner) -> Instance:
+    """Rename an instance: directory, image tag, and clean up legacy overlay.
+
+    Raises InstanceError if old doesn't exist, new already exists, or name is invalid.
+    Returns the Instance loaded from the new directory.
+    """
+    validate_name(new_name)
+    instances_dir = Path(instances_dir)
+    old_dir = instances_dir / old_name
+    new_dir = instances_dir / new_name
+
+    if not old_dir.is_dir():
+        raise InstanceError(f"Instance {old_name!r} not found at {old_dir}")
+    if new_dir.exists():
+        raise InstanceError(f"Instance {new_name!r} already exists at {new_dir}")
+
+    # Clean up legacy overlay container ({old_name}-overlay) if present.
+    # The decoupled overlay_id container is unaffected by the rename.
+    legacy_overlay = f"{old_name}-overlay"
+    if runner.container_exists(legacy_overlay):
+        runner.remove(legacy_overlay, force=True)
+
+    # Retag image if it exists
+    if runner.image_exists(old_name):
+        runner.tag(old_name, new_name)
+        runner.rmi(old_name)
+
+    # Rename directory
+    old_dir.rename(new_dir)
+
+    return Instance.from_directory(new_dir)
 
 
 @dataclass
@@ -157,6 +199,7 @@ class InstanceInfo:
     image_built: bool
     overlay_running: bool
     config: InstanceConfig
+    base_image: str | None = None
 
 
 def list_all(instances_dir: Path, runner: PodmanRunner) -> list[InstanceInfo]:
@@ -174,7 +217,9 @@ def list_all(instances_dir: Path, runner: PodmanRunner) -> list[InstanceInfo]:
         config_path = entry / "scratch.toml"
         config = load(config_path)
         image_built = runner.image_exists(entry.name)
-        overlay_running = runner.container_running(f"{entry.name}-overlay")
+        overlay_name = config.overlay_id if config.overlay_id else f"{entry.name}-overlay"
+        overlay_running = runner.container_running(overlay_name)
+        base_image = detect_base_image(entry)
         results.append(
             InstanceInfo(
                 name=entry.name,
@@ -182,6 +227,7 @@ def list_all(instances_dir: Path, runner: PodmanRunner) -> list[InstanceInfo]:
                 image_built=image_built,
                 overlay_running=overlay_running,
                 config=config,
+                base_image=base_image,
             )
         )
     return results

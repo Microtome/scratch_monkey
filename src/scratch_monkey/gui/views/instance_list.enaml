@@ -5,43 +5,170 @@ with enaml.imports():
     from enaml.stdlib.message_box import question
 from enaml.stdlib.dialog_buttons import DialogButton
 
-from enaml.widgets.api import Container, PushButton, ScrollArea, VGroup
+from enaml.widgets.api import Container, Dialog, Field, HGroup, Label, PushButton, ScrollArea, VGroup
 from enaml.layout.api import vbox
 from enaml.core.api import Looper
+from enaml.styling import StyleSheet, Style, Setter
 
 from scratch_monkey.gui.views.create_dialog import CreateInstanceDialog
 
 
+enamldef RenameDialog(Dialog): dlg:
+    attr app_model
+    attr instance_name : str = ""
+    attr _error_msg : str = ""
+
+    title = "Rename Instance"
+
+    Container:
+        VGroup:
+            Label:
+                text << f"Rename '{dlg.instance_name}' to:"
+            Field: name_field:
+                text = dlg.instance_name
+                placeholder = "new-name"
+                submit_triggers = ['lost_focus', 'return_pressed', 'auto_sync']
+            Label: error_label:
+                text << dlg._error_msg
+                visible << bool(dlg._error_msg)
+            HGroup:
+                PushButton:
+                    text = "Rename"
+                    enabled << bool(name_field.text.strip()) and name_field.text.strip() != dlg.instance_name
+                    clicked ::
+                        err = dlg.app_model.rename_instance(dlg.instance_name, name_field.text.strip())
+                        if err:
+                            dlg._error_msg = err
+                        else:
+                            dlg.close()
+                PushButton:
+                    text = "Cancel"
+                    clicked ::
+                        dlg.close()
+
+
+enamldef CloneDialog(Dialog): dlg:
+    attr app_model
+    attr instance_name : str = ""
+    attr _error_msg : str = ""
+
+    title = "Clone Instance"
+
+    Container:
+        VGroup:
+            Label:
+                text << f"Clone '{dlg.instance_name}' as:"
+            Field: name_field:
+                placeholder << f"{dlg.instance_name}-copy"
+                submit_triggers = ['lost_focus', 'return_pressed', 'auto_sync']
+            Label: error_label:
+                text << dlg._error_msg
+                visible << bool(dlg._error_msg)
+            HGroup:
+                PushButton:
+                    text = "Clone"
+                    enabled << bool(name_field.text.strip())
+                    clicked ::
+                        err = dlg.app_model.clone_instance(dlg.instance_name, name_field.text.strip())
+                        if err:
+                            dlg._error_msg = err
+                        else:
+                            dlg.close()
+                PushButton:
+                    text = "Cancel"
+                    clicked ::
+                        dlg.close()
+
+
 enamldef InstanceListPanel(Container): panel:
     attr app_model
+    minimum_size = (350, 0)
+
+    StyleSheet:
+        Style:
+            style_class = "status-running"
+            Setter:
+                field = "color"
+                value = "#22aa22"
+        Style:
+            style_class = "status-stopped"
+            Setter:
+                field = "color"
+                value = "#cc2222"
 
     constraints = [vbox(scroll, new_btn)]
 
     ScrollArea: scroll:
-        Container:
+        VGroup:
+            spacing = 2
             Looper:
                 iterable << app_model.instances
-                PushButton: btn:
+                HGroup:
                     attr inst = loop_item
-                    checkable = True
-                    checked << (app_model.selected_instance == inst.name)
-                    text << (
-                        "[running] " if inst.overlay_running
-                        else "[built]   " if inst.image_built
-                        else "[no img]  "
-                    ) + inst.name
-                    clicked ::
-                        proceed = True
-                        if app_model.selected and app_model.selected.dirty:
+                    align_widths = False
+                    padding = 0
+                    spacing = 2
+                    Label:
+                        text = "\u25CF"
+                        style_class << ("status-running" if inst.overlay_running else "status-stopped")
+                        tool_tip << ("Running" if inst.overlay_running else "Built" if inst.image_built else "No image")
+                        minimum_size = (16, 0)
+                        maximum_size = (16, 16777215)
+                    Label:
+                        text << ("F" if "fedora" in (inst.base_image or "").lower() else "\u2013")
+                        tool_tip << (inst.base_image if inst.base_image and "fedora" in inst.base_image.lower() else "Scratch")
+                        minimum_size = (16, 0)
+                        maximum_size = (16, 16777215)
+                    PushButton: btn:
+                        checkable = True
+                        checked << (app_model.selected_instance == inst.name)
+                        hug_width = 'ignore'
+                        text << inst.name
+                        clicked ::
+                            proceed = True
+                            if app_model.selected and app_model.selected.dirty:
+                                result = question(
+                                    panel,
+                                    "Unsaved Changes",
+                                    f"Instance '{app_model.selected_instance}' has unsaved changes. Discard them?",
+                                    [DialogButton('Discard', 'accept'), DialogButton('Cancel', 'reject')],
+                                )
+                                proceed = result is not None and result.action == 'accept'
+                            if proceed:
+                                app_model.selected_instance = inst.name
+
+                    PushButton:
+                        text = "\u29C9"
+                        minimum_size = (30, 0)
+                        maximum_size = (30, 16777215)
+                        tool_tip = "Clone this instance"
+                        clicked ::
+                            dlg = CloneDialog(panel, app_model=app_model, instance_name=inst.name)
+                            dlg.exec_()
+
+                    PushButton:
+                        text = "\u270E"
+                        minimum_size = (30, 0)
+                        maximum_size = (30, 16777215)
+                        tool_tip = "Rename this instance"
+                        clicked ::
+                            dlg = RenameDialog(panel, app_model=app_model, instance_name=inst.name)
+                            dlg.exec_()
+
+                    PushButton:
+                        text = "\u2717"
+                        minimum_size = (30, 0)
+                        maximum_size = (30, 16777215)
+                        tool_tip = "Delete this instance"
+                        clicked ::
                             result = question(
                                 panel,
-                                "Unsaved Changes",
-                                f"Instance '{app_model.selected_instance}' has unsaved changes. Discard them?",
-                                [DialogButton('Discard', 'accept'), DialogButton('Cancel', 'reject')],
+                                "Delete Instance",
+                                f"Delete instance '{inst.name}' and all its data?",
+                                [DialogButton('Delete', 'accept'), DialogButton('Cancel', 'reject')],
                             )
-                            proceed = result is not None and result.action == 'accept'
-                        if proceed:
-                            app_model.selected_instance = inst.name
+                            if result is not None and result.action == 'accept':
+                                app_model.delete_instance(inst.name)
 
     PushButton: new_btn:
         text = "+ New Instance"

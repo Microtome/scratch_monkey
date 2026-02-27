@@ -4,7 +4,10 @@ from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 import pytest
+from click.testing import CliRunner
 
+from scratch_monkey.cli.main import cli
+from scratch_monkey.config import ConfigError, InstanceConfig, save
 from scratch_monkey.container import PodmanRunner
 from scratch_monkey.instance import (
     InstanceError,
@@ -14,6 +17,7 @@ from scratch_monkey.instance import (
     detect_base_image,
     is_fedora_based,
     list_all,
+    rename,
 )
 
 
@@ -134,6 +138,20 @@ class TestClone:
         with pytest.raises(ConfigError):
             clone("source", ".invalid", instances_dir)
 
+    def test_clone_tags_image_when_source_has_image(self, instances_dir, source_instance, mock_runner):
+        mock_runner.image_exists.return_value = True
+        clone("source", "dest", instances_dir, runner=mock_runner)
+        mock_runner.tag.assert_called_once_with("source", "dest")
+
+    def test_clone_skips_tag_when_no_image(self, instances_dir, source_instance, mock_runner):
+        mock_runner.image_exists.return_value = False
+        clone("source", "dest", instances_dir, runner=mock_runner)
+        mock_runner.tag.assert_not_called()
+
+    def test_clone_without_runner_succeeds(self, instances_dir, source_instance):
+        inst = clone("source", "dest", instances_dir)
+        assert inst.name == "dest"
+
 
 # ─── delete ───────────────────────────────────────────────────────────────────
 
@@ -210,6 +228,14 @@ class TestListAll:
         mock_runner.image_exists.return_value = True
         result = list_all(instances_dir, mock_runner)
         assert result[0].image_built is True
+
+    def test_list_all_populates_base_image(self, instances_dir, project_dir, mock_runner):
+        create("scratch-inst", instances_dir, "scratch_dev", project_dir)
+        create("fedora-inst", instances_dir, "scratch_dev_fedora", project_dir)
+        result = list_all(instances_dir, mock_runner)
+        by_name = {r.name: r for r in result}
+        assert by_name["scratch-inst"].base_image == "scratch_dev"
+        assert by_name["fedora-inst"].base_image == "scratch_dev_fedora"
 
 
 # ─── skel_copy ────────────────────────────────────────────────────────────────
@@ -291,3 +317,214 @@ class TestIsFedoraBased:
             "FROM fedora:latest AS builder\nRUN echo hi\nFROM scratch_dev\n"
         )
         assert is_fedora_based(tmp_path) is False
+
+
+# ─── overlay_id in delete ─────────────────────────────────────────────────────
+
+
+class TestDeleteOverlayId:
+    def _make_instance(self, instances_dir, overlay_id: str = "") -> None:
+        """Create a minimal instance dir with a given overlay_id in config."""
+        inst_dir = instances_dir / "myproject"
+        inst_dir.mkdir(parents=True)
+        (inst_dir / "home").mkdir()
+        (inst_dir / "Dockerfile").write_text("FROM scratch_dev\n")
+        (inst_dir / ".env").touch()
+        cfg = InstanceConfig(overlay_id=overlay_id)
+        save(inst_dir / "scratch.toml", cfg)
+
+    def test_delete_uses_overlay_id(self, instances_dir, mock_runner):
+        """delete() checks the overlay_id container name when overlay_id is set."""
+        self._make_instance(instances_dir, overlay_id="sm-deadbeef")
+        mock_runner.container_exists.return_value = True
+        delete("myproject", instances_dir, mock_runner)
+        mock_runner.container_exists.assert_called_with("sm-deadbeef")
+        mock_runner.remove.assert_called_with("sm-deadbeef", force=True)
+
+    def test_delete_falls_back_to_legacy_name(self, instances_dir, mock_runner):
+        """delete() falls back to '{name}-overlay' when overlay_id is empty."""
+        self._make_instance(instances_dir, overlay_id="")
+        mock_runner.container_exists.return_value = True
+        delete("myproject", instances_dir, mock_runner)
+        mock_runner.container_exists.assert_called_with("myproject-overlay")
+        mock_runner.remove.assert_called_with("myproject-overlay", force=True)
+
+
+# ─── overlay_id in list_all ───────────────────────────────────────────────────
+
+
+class TestListAllOverlayId:
+    def test_list_all_uses_overlay_id(self, instances_dir, mock_runner):
+        """list_all() checks overlay_id container when overlay_id is set."""
+        inst_dir = instances_dir / "testinst"
+        inst_dir.mkdir()
+        (inst_dir / "home").mkdir()
+        (inst_dir / "Dockerfile").write_text("FROM scratch_dev\n")
+        (inst_dir / ".env").touch()
+        cfg = InstanceConfig(overlay_id="sm-cafebabe")
+        save(inst_dir / "scratch.toml", cfg)
+
+        mock_runner.container_running.return_value = True
+        result = list_all(instances_dir, mock_runner)
+
+        assert len(result) == 1
+        mock_runner.container_running.assert_called_with("sm-cafebabe")
+
+    def test_list_all_falls_back_to_legacy_name(self, instances_dir, mock_runner):
+        """list_all() falls back to '{name}-overlay' when overlay_id is empty."""
+        inst_dir = instances_dir / "testinst"
+        inst_dir.mkdir()
+        (inst_dir / "home").mkdir()
+        (inst_dir / "Dockerfile").write_text("FROM scratch_dev\n")
+        (inst_dir / ".env").touch()
+        cfg = InstanceConfig(overlay_id="")
+        save(inst_dir / "scratch.toml", cfg)
+
+        mock_runner.container_running.return_value = False
+        list_all(instances_dir, mock_runner)
+
+        mock_runner.container_running.assert_called_with("testinst-overlay")
+
+
+# ─── overlay_id in clone ──────────────────────────────────────────────────────
+
+
+class TestCloneOverlayId:
+    def test_clone_clears_overlay_id(self, instances_dir, project_dir, mock_runner):
+        """Cloning an instance with overlay_id set results in empty overlay_id on clone."""
+        # Create source with overlay_id
+        create("source", instances_dir, "scratch_dev", project_dir)
+        src_cfg = InstanceConfig(overlay_id="sm-original")
+        save(instances_dir / "source" / "scratch.toml", src_cfg)
+
+        result = clone("source", "dest", instances_dir)
+
+        assert result.config.overlay_id == ""
+        # Verify it's also persisted on disk
+        from scratch_monkey.config import load
+        saved = load(instances_dir / "dest" / "scratch.toml")
+        assert saved.overlay_id == ""
+
+    def test_clone_without_overlay_id_stays_empty(self, instances_dir, project_dir):
+        """Cloning an instance without overlay_id keeps it empty."""
+        create("source", instances_dir, "scratch_dev", project_dir)
+        result = clone("source", "dest", instances_dir)
+        assert result.config.overlay_id == ""
+
+
+# ─── rename ───────────────────────────────────────────────────────────────────
+
+
+class TestRename:
+    def _make_instance(self, instances_dir: Path, name: str, project_dir: Path) -> None:
+        """Helper to create a minimal instance directory."""
+        create(name, instances_dir, "scratch_dev", project_dir)
+
+    def test_rename_moves_directory(self, instances_dir, project_dir, mock_runner):
+        """rename() renames the instance directory."""
+        self._make_instance(instances_dir, "old", project_dir)
+        rename("old", "new", instances_dir, mock_runner)
+        assert (instances_dir / "new").is_dir()
+        assert not (instances_dir / "old").exists()
+
+    def test_rename_retags_image(self, instances_dir, project_dir, mock_runner):
+        """rename() calls runner.tag and runner.rmi when the image exists."""
+        self._make_instance(instances_dir, "old", project_dir)
+        mock_runner.image_exists.return_value = True
+        rename("old", "new", instances_dir, mock_runner)
+        mock_runner.tag.assert_called_once_with("old", "new")
+        mock_runner.rmi.assert_called_once_with("old")
+
+    def test_rename_skips_retag_when_no_image(self, instances_dir, project_dir, mock_runner):
+        """rename() skips tag/rmi when no image exists."""
+        self._make_instance(instances_dir, "old", project_dir)
+        mock_runner.image_exists.return_value = False
+        rename("old", "new", instances_dir, mock_runner)
+        mock_runner.tag.assert_not_called()
+        mock_runner.rmi.assert_not_called()
+
+    def test_rename_cleans_up_legacy_overlay(self, instances_dir, project_dir, mock_runner):
+        """rename() removes legacy '{old_name}-overlay' container if present."""
+        self._make_instance(instances_dir, "old", project_dir)
+        mock_runner.container_exists.return_value = True
+        rename("old", "new", instances_dir, mock_runner)
+        mock_runner.container_exists.assert_called_with("old-overlay")
+        mock_runner.remove.assert_called_with("old-overlay", force=True)
+
+    def test_rename_skips_legacy_overlay_when_absent(self, instances_dir, project_dir, mock_runner):
+        """rename() does not call remove when legacy overlay container is absent."""
+        self._make_instance(instances_dir, "old", project_dir)
+        mock_runner.container_exists.return_value = False
+        rename("old", "new", instances_dir, mock_runner)
+        mock_runner.remove.assert_not_called()
+
+    def test_rename_raises_if_old_not_found(self, instances_dir, mock_runner):
+        """rename() raises InstanceError if the source instance does not exist."""
+        with pytest.raises(InstanceError, match="not found"):
+            rename("nonexistent", "new", instances_dir, mock_runner)
+
+    def test_rename_raises_if_new_already_exists(self, instances_dir, project_dir, mock_runner):
+        """rename() raises InstanceError if the destination already exists."""
+        self._make_instance(instances_dir, "old", project_dir)
+        self._make_instance(instances_dir, "new", project_dir)
+        with pytest.raises(InstanceError, match="already exists"):
+            rename("old", "new", instances_dir, mock_runner)
+
+    def test_rename_invalid_name_raises(self, instances_dir, project_dir, mock_runner):
+        """rename() raises ConfigError for an invalid destination name."""
+        self._make_instance(instances_dir, "old", project_dir)
+        with pytest.raises(ConfigError):
+            rename("old", "-invalid", instances_dir, mock_runner)
+
+    def test_rename_returns_instance_from_new_dir(self, instances_dir, project_dir, mock_runner):
+        """rename() returns an Instance with the new name and directory."""
+        self._make_instance(instances_dir, "old", project_dir)
+        inst = rename("old", "new", instances_dir, mock_runner)
+        assert inst.name == "new"
+        assert inst.directory == instances_dir / "new"
+
+    def test_rename_preserves_config(self, instances_dir, project_dir, mock_runner):
+        """rename() preserves the instance config after rename."""
+        from scratch_monkey.config import load
+        self._make_instance(instances_dir, "old", project_dir)
+        # Customize config
+        cfg = InstanceConfig(wayland=True, ssh=True)
+        save(instances_dir / "old" / "scratch.toml", cfg)
+
+        inst = rename("old", "new", instances_dir, mock_runner)
+
+        assert inst.config.wayland is True
+        assert inst.config.ssh is True
+        # Verify config is on disk too
+        saved = load(instances_dir / "new" / "scratch.toml")
+        assert saved.wayland is True
+        assert saved.ssh is True
+
+
+# ─── rename CLI ───────────────────────────────────────────────────────────────
+
+
+class TestRenameCli:
+    def test_rename_cli_success(self, instances_dir, project_dir, mock_runner):
+        """CLI rename prints success message."""
+        create("old", instances_dir, "scratch_dev", project_dir)
+        runner_cli = CliRunner()
+        with patch("scratch_monkey.cli.main.PodmanRunner", return_value=mock_runner):
+            result = runner_cli.invoke(
+                cli,
+                ["--instances-dir", str(instances_dir), "rename", "old", "new"],
+            )
+        assert result.exit_code == 0
+        assert "old" in result.output
+        assert "new" in result.output
+
+    def test_rename_cli_error_not_found(self, instances_dir, mock_runner):
+        """CLI rename prints error and exits non-zero for nonexistent instance."""
+        runner_cli = CliRunner()
+        with patch("scratch_monkey.cli.main.PodmanRunner", return_value=mock_runner):
+            result = runner_cli.invoke(
+                cli,
+                ["--instances-dir", str(instances_dir), "rename", "ghost", "new"],
+            )
+        assert result.exit_code != 0
+        assert "Error" in result.output or "Error" in (result.stderr or "")

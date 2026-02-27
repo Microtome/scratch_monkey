@@ -52,10 +52,12 @@ enamldef ScratchMonkeyWindow(MainWindow): win:
 
         Splitter: splitter:
             SplitItem:
+                stretch = 0
                 InstanceListPanel:
                     app_model = win.app_model
 
             SplitItem:
+                stretch = 1
                 InstanceDetailPanel:
                     app_model = win.app_model
 

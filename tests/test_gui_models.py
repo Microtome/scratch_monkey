@@ -46,6 +46,32 @@ class TestVolumeMountEntry:
         assert e.to_spec() == original
 
 
+class TestInstanceModelBaseImage:
+    def test_from_info_populates_base_image(self):
+        info = InstanceInfo(
+            name="test",
+            directory="/tmp/test",
+            image_built=False,
+            overlay_running=False,
+            config=InstanceConfig(),
+            base_image="scratch_dev_fedora",
+        )
+        m = InstanceModel.from_info(info)
+        assert m.base_image == "scratch_dev_fedora"
+
+    def test_from_info_base_image_none_becomes_empty(self):
+        info = InstanceInfo(
+            name="test",
+            directory="/tmp/test",
+            image_built=False,
+            overlay_running=False,
+            config=InstanceConfig(),
+            base_image=None,
+        )
+        m = InstanceModel.from_info(info)
+        assert m.base_image == ""
+
+
 class TestInstanceModelGpuAndDevices:
     def _make_info(self, gpu=False, devices=None):
         cfg = InstanceConfig(
@@ -434,6 +460,167 @@ class TestAppModelCreateSharedVolume:
             result = app.create_shared_volume("bad name!")
 
         assert result != ""
+
+
+class TestAppModelRenameInstance:
+    """Tests for AppModel.rename_instance()."""
+
+    def _make_app(self, tmp_path):
+        from unittest.mock import MagicMock, patch
+
+        instances_dir = tmp_path / "scratch-monkey"
+        instances_dir.mkdir()
+
+        runner = MagicMock()
+        runner.container_exists.return_value = False
+        runner.container_running.return_value = False
+        runner.image_exists.return_value = False
+
+        project_dir = tmp_path / "project"
+        project_dir.mkdir()
+
+        with patch("scratch_monkey.gui.models._PROJECT_DIR", project_dir):
+            app = AppModel(instances_dir=instances_dir, runner=runner)
+
+        return app, instances_dir, project_dir
+
+    def test_rename_success(self, tmp_path):
+        """Rename returns '' and updates state on success."""
+        from unittest.mock import patch
+
+        app, instances_dir, project_dir = self._make_app(tmp_path)
+
+        # Create an instance first
+        with patch("scratch_monkey.gui.models._PROJECT_DIR", project_dir):
+            app.create_instance("old")
+        app.selected_instance = "old"
+
+        with patch("scratch_monkey.gui.models._PROJECT_DIR", project_dir):
+            err = app.rename_instance("old", "new")
+
+        assert err == ""
+        assert app.selected_instance == "new"
+        assert (instances_dir / "new").is_dir()
+        assert not (instances_dir / "old").is_dir()
+
+    def test_rename_updates_selected(self, tmp_path):
+        """When renaming the selected instance, selected_instance updates."""
+        from unittest.mock import patch
+
+        app, instances_dir, project_dir = self._make_app(tmp_path)
+
+        with patch("scratch_monkey.gui.models._PROJECT_DIR", project_dir):
+            app.create_instance("myinst")
+        app.selected_instance = "myinst"
+
+        with patch("scratch_monkey.gui.models._PROJECT_DIR", project_dir):
+            err = app.rename_instance("myinst", "renamed")
+
+        assert err == ""
+        assert app.selected_instance == "renamed"
+
+    def test_rename_failure_returns_error(self, tmp_path):
+        """On failure, returns the error string without changing state."""
+        from unittest.mock import patch
+
+        app, instances_dir, project_dir = self._make_app(tmp_path)
+
+        with patch("scratch_monkey.gui.models._PROJECT_DIR", project_dir):
+            app.create_instance("myinst")
+        app.selected_instance = "myinst"
+
+        # Renaming nonexistent instance should raise an error
+        with patch("scratch_monkey.gui.models._PROJECT_DIR", project_dir):
+            err = app.rename_instance("nonexistent", "whatever")
+
+        assert err != ""
+        assert app.selected_instance == "myinst"  # unchanged
+
+
+class TestAppModelCloneInstance:
+    """Tests for AppModel.clone_instance()."""
+
+    def _make_app(self, tmp_path):
+        from unittest.mock import MagicMock, patch
+
+        instances_dir = tmp_path / "scratch-monkey"
+        instances_dir.mkdir()
+
+        runner = MagicMock()
+        runner.container_exists.return_value = False
+        runner.container_running.return_value = False
+        runner.image_exists.return_value = False
+
+        project_dir = tmp_path / "project"
+        project_dir.mkdir()
+
+        with patch("scratch_monkey.gui.models._PROJECT_DIR", project_dir):
+            app = AppModel(instances_dir=instances_dir, runner=runner)
+
+        return app, instances_dir, project_dir
+
+    def test_clone_success(self, tmp_path):
+        """Clone returns '' and selects the clone on success."""
+        from unittest.mock import patch
+
+        app, instances_dir, project_dir = self._make_app(tmp_path)
+
+        with patch("scratch_monkey.gui.models._PROJECT_DIR", project_dir):
+            app.create_instance("source")
+            err = app.clone_instance("source", "dest")
+
+        assert err == ""
+        assert app.selected_instance == "dest"
+        assert (instances_dir / "dest").is_dir()
+
+    def test_clone_selects_new_instance(self, tmp_path):
+        """After cloning, selected_instance is set to the dest name."""
+        from unittest.mock import patch
+
+        app, instances_dir, project_dir = self._make_app(tmp_path)
+
+        with patch("scratch_monkey.gui.models._PROJECT_DIR", project_dir):
+            app.create_instance("orig")
+            err = app.clone_instance("orig", "clone")
+
+        assert err == ""
+        assert app.selected_instance == "clone"
+        assert any(i.name == "clone" for i in app.instances)
+
+    def test_clone_failure_returns_error(self, tmp_path):
+        """On failure, returns the error string without changing selected."""
+        from unittest.mock import patch
+
+        app, instances_dir, project_dir = self._make_app(tmp_path)
+
+        with patch("scratch_monkey.gui.models._PROJECT_DIR", project_dir):
+            app.create_instance("source")
+            app.create_instance("existing")
+        app.selected_instance = "source"
+
+        with patch("scratch_monkey.gui.models._PROJECT_DIR", project_dir):
+            err = app.clone_instance("source", "existing")
+
+        assert err != ""
+        assert app.selected_instance == "source"  # unchanged
+
+    def test_clone_passes_runner_and_tags_image(self, tmp_path):
+        """Clone passes runner to clone(); runner.tag() called when image exists."""
+        from unittest.mock import patch
+
+        app, instances_dir, project_dir = self._make_app(tmp_path)
+
+        with patch("scratch_monkey.gui.models._PROJECT_DIR", project_dir):
+            app.create_instance("source")
+
+        # Mark source image as existing so tag() gets called
+        app._runner.image_exists.return_value = True
+
+        with patch("scratch_monkey.gui.models._PROJECT_DIR", project_dir):
+            err = app.clone_instance("source", "dest")
+
+        assert err == ""
+        app._runner.tag.assert_called_once_with("source", "dest")
 
 
 class TestInstanceModelEnvVars:

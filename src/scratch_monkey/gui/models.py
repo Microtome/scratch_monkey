@@ -16,7 +16,8 @@ except ImportError:
 
 from ..config import ConfigError, InstanceConfig, save
 from ..container import PodmanRunner
-from ..instance import InstanceError, InstanceInfo, create, list_all, skel_copy
+from ..instance import Instance, InstanceError, InstanceInfo, clone, create, delete, list_all, rename, skel_copy
+from ..overlay import reset as overlay_reset
 from ..shared import list_shared, parse_shared_entry
 
 _PROJECT_DIR = Path(__file__).parent.parent.parent.parent
@@ -95,6 +96,7 @@ class InstanceModel(Atom):
     directory = Str()
     image_built = Bool(False)
     overlay_running = Bool(False)
+    base_image = Str("")
 
     # Config fields
     cmd = Str("/bin/bash")
@@ -120,6 +122,7 @@ class InstanceModel(Atom):
         m.directory = str(info.directory)
         m.image_built = info.image_built
         m.overlay_running = info.overlay_running
+        m.base_image = info.base_image or ""
         cfg = info.config
         m.cmd = cfg.cmd
         m.wayland = cfg.wayland
@@ -304,14 +307,18 @@ class AppModel(Atom):
 
     def reset_overlay(self, name: str) -> None:
         """Remove the overlay container for the named instance."""
+        instances_dir = Path(self.instances_dir)
+        inst_dir = instances_dir / name
+        if not inst_dir.is_dir():
+            self.status_message = f"Instance {name!r} not found"
+            return
+        inst = Instance.from_directory(inst_dir)
         try:
-            result = subprocess.run(
-                ["scratch-monkey", "reset", name, "--yes"],
-                capture_output=True,
-                text=True,
-            )
-            msg = result.stdout.strip() or result.stderr.strip()
-            self.status_message = msg or f"Reset overlay for {name!r}"
+            removed = overlay_reset(inst, self._runner)
+            if removed:
+                self.status_message = f"Overlay container for {name!r} removed."
+            else:
+                self.status_message = f"No overlay container found for {name!r}"
         except Exception as e:
             self.status_message = f"Error: {e}"
         self.refresh()
@@ -319,18 +326,35 @@ class AppModel(Atom):
     def delete_instance(self, name: str) -> None:
         """Delete the named instance (no confirmation — caller must confirm)."""
         try:
-            result = subprocess.run(
-                ["scratch-monkey", "delete", name, "--yes"],
-                capture_output=True,
-                text=True,
-            )
-            msg = result.stdout.strip() or result.stderr.strip()
-            self.status_message = msg or f"Deleted {name!r}"
-            if result.returncode == 0:
-                self.selected_instance = ""
+            delete(name, Path(self.instances_dir), self._runner)
+            self.status_message = f"Deleted {name!r}"
+            self.selected_instance = ""
         except Exception as e:
             self.status_message = f"Error: {e}"
         self.refresh()
+
+    def rename_instance(self, old_name: str, new_name: str) -> str:
+        """Rename an instance. Returns '' on success or error string."""
+        try:
+            rename(old_name, new_name, Path(self.instances_dir), self._runner)
+            self.status_message = f"Renamed {old_name!r} to {new_name!r}"
+            if self.selected_instance == old_name:
+                self.selected_instance = new_name
+        except Exception as e:
+            return str(e)
+        self.refresh()
+        return ""
+
+    def clone_instance(self, source: str, dest: str) -> str:
+        """Clone an instance. Returns '' on success or error string."""
+        try:
+            clone(source, dest, Path(self.instances_dir), self._runner)
+            self.status_message = f"Cloned {source!r} to {dest!r}"
+            self.selected_instance = dest
+        except Exception as e:
+            return str(e)
+        self.refresh()
+        return ""
 
     def new_instance_model(self) -> InstanceModel:
         """Create a fresh InstanceModel with shared entries initialized."""
