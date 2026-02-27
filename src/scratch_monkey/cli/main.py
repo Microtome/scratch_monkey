@@ -326,7 +326,8 @@ def reset(ctx: click.Context, name: str, yes: bool) -> None:
     runner: PodmanRunner = ctx.obj["runner"]
     inst = _get_instance(instances_dir, name)
 
-    if not runner.container_exists(f"{name}-overlay"):
+    overlay_name = inst.config.overlay_id or f"{name}-overlay"
+    if not runner.container_exists(overlay_name):
         click.echo(f"No overlay container found for {name!r}")
         return
 

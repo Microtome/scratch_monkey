@@ -34,12 +34,15 @@ def scratch_instance(tmp_path):
     inst_dir.mkdir()
     (inst_dir / "home").mkdir()
     (inst_dir / "Dockerfile").write_text("FROM scratch_dev\n")
-    (inst_dir / "scratch.toml").write_text("")
+    cfg = InstanceConfig(overlay_id="sm-testtest")
     (inst_dir / ".env").touch()
+    # Write scratch.toml with the preset overlay_id so _overlay_name returns it
+    from scratch_monkey.config import save as cfg_save
+    cfg_save(inst_dir / "scratch.toml", cfg)
     return Instance(
         name="myinstance",
         directory=inst_dir,
-        config=InstanceConfig(),
+        config=cfg,
         home_dir=inst_dir / "home",
     )
 
@@ -50,12 +53,14 @@ def fedora_instance(tmp_path):
     inst_dir.mkdir()
     (inst_dir / "home").mkdir()
     (inst_dir / "Dockerfile").write_text("FROM scratch_dev_fedora\n")
-    (inst_dir / "scratch.toml").write_text("")
+    cfg = InstanceConfig(overlay_id="sm-fedotest")
     (inst_dir / ".env").touch()
+    from scratch_monkey.config import save as cfg_save
+    cfg_save(inst_dir / "scratch.toml", cfg)
     return Instance(
         name="fedorainst",
         directory=inst_dir,
-        config=InstanceConfig(),
+        config=cfg,
         home_dir=inst_dir / "home",
     )
 
@@ -63,8 +68,40 @@ def fedora_instance(tmp_path):
 # ─── _overlay_name ────────────────────────────────────────────────────────────
 
 
-def test_overlay_name(scratch_instance):
-    assert _overlay_name(scratch_instance) == "myinstance-overlay"
+def test_overlay_name_returns_existing_overlay_id(scratch_instance):
+    """When overlay_id is already set, _overlay_name returns it directly."""
+    scratch_instance.config.overlay_id = "sm-aabbccdd"
+    result = _overlay_name(scratch_instance)
+    assert result == "sm-aabbccdd"
+
+
+def test_overlay_name_generates_and_saves_when_empty(tmp_path):
+    """When overlay_id is empty, _overlay_name generates one and saves it."""
+    inst_dir = tmp_path / "geninstance"
+    inst_dir.mkdir()
+    (inst_dir / "home").mkdir()
+    (inst_dir / "Dockerfile").write_text("FROM scratch_dev\n")
+    (inst_dir / "scratch.toml").write_text("")
+    (inst_dir / ".env").touch()
+    inst = Instance(
+        name="geninstance",
+        directory=inst_dir,
+        config=InstanceConfig(),
+        home_dir=inst_dir / "home",
+    )
+    assert inst.config.overlay_id == ""
+
+    result = _overlay_name(inst)
+
+    # Should have generated a valid overlay_id
+    import re
+    assert re.fullmatch(r"sm-[0-9a-f]{8}", result), f"Bad format: {result!r}"
+    # Should have mutated config
+    assert inst.config.overlay_id == result
+    # Should have persisted to disk
+    from scratch_monkey.config import load
+    saved = load(inst_dir / "scratch.toml")
+    assert saved.overlay_id == result
 
 
 # ─── ensure_running ───────────────────────────────────────────────────────────
@@ -80,7 +117,7 @@ class TestEnsureRunning:
         mock_runner.container_exists.return_value = True
         mock_runner.container_running.return_value = False
         ensure_running(scratch_instance, mock_runner, "scratch_dev")
-        mock_runner.start.assert_called_once_with("myinstance-overlay")
+        mock_runner.start.assert_called_once_with("sm-testtest")
         mock_runner.run_daemon.assert_not_called()
 
     def test_does_nothing_if_already_running(self, scratch_instance, mock_runner):
@@ -92,7 +129,7 @@ class TestEnsureRunning:
 
     def test_returns_container_name(self, scratch_instance, mock_runner):
         name = ensure_running(scratch_instance, mock_runner, "scratch_dev")
-        assert name == "myinstance-overlay"
+        assert name == "sm-testtest"
 
     def test_skips_user_setup_for_scratch(self, scratch_instance, mock_runner):
         """Scratch instances must NOT run useradd/sudoers setup."""
@@ -218,7 +255,7 @@ class TestReset:
         mock_runner.container_exists.return_value = True
         result = reset(scratch_instance, mock_runner)
         assert result is True
-        mock_runner.remove.assert_called_once_with("myinstance-overlay", force=True)
+        mock_runner.remove.assert_called_once_with("sm-testtest", force=True)
 
     def test_returns_false_if_no_container(self, scratch_instance, mock_runner):
         mock_runner.container_exists.return_value = False

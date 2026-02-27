@@ -78,7 +78,7 @@ def export_command(
 
     content = _SCRIPT_TEMPLATE.substitute(
         instance_name=instance.name,
-        overlay_name=f"{instance.name}-overlay",
+        overlay_name=instance.config.overlay_id or f"{instance.name}-overlay",
         cmd=cmd,
         base_image=base_image,
         hostname=hostname,
