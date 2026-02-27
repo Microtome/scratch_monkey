@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 import shutil
 import subprocess
 from pathlib import Path
@@ -55,6 +56,12 @@ def _launch_in_terminal(cmd: list[str]) -> str:
         return "No terminal emulator found. Install xdg-terminal-exec, gnome-terminal, or similar."
     subprocess.Popen([*prefix, *cmd])
     return ""
+
+
+def _open_in_editor(file_path: Path) -> str:
+    """Open a file in the user's editor. Returns an error string or ''."""
+    editor = os.environ.get("VISUAL") or os.environ.get("EDITOR", "vi")
+    return _launch_in_terminal([editor, str(file_path)])
 
 
 class VolumeMountEntry(Atom):
@@ -370,6 +377,27 @@ class AppModel(Atom):
         except Exception as e:
             return str(e)
         return ""
+
+    def edit_file(self, name: str, file_type: str) -> None:
+        """Open an instance file in the user's editor."""
+        instances_dir = Path(self.instances_dir)
+        inst_dir = instances_dir / name
+        if not inst_dir.is_dir():
+            self.status_message = f"Instance {name!r} not found"
+            return
+        file_map = {
+            "dockerfile": inst_dir / "Dockerfile",
+            "env": inst_dir / ".env",
+        }
+        target = file_map.get(file_type)
+        if target is None:
+            self.status_message = f"Unknown file type {file_type!r}"
+            return
+        err = _open_in_editor(target)
+        if err:
+            self.status_message = err
+        else:
+            self.status_message = f"Editing {file_type} for {name!r}..."
 
     def new_instance_model(self) -> InstanceModel:
         """Create a fresh InstanceModel with shared entries initialized."""
