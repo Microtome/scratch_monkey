@@ -32,6 +32,7 @@ enamldef InstanceDetailPanel(Container): panel:
 
         Label:
             text = "Select an instance from the list."
+            hug_height = 'ignore'
 
     Conditional:
         condition << app_model.selected_instance != ""

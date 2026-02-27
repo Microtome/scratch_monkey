@@ -81,6 +81,7 @@ enamldef CloneDialog(Dialog): dlg:
 
 enamldef InstanceListPanel(Container): panel:
     attr app_model
+    minimum_size = (350, 0)
 
     constraints = [vbox(scroll, new_btn)]
 
