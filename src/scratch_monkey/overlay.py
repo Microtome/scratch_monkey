@@ -213,6 +213,7 @@ def exec_shell(
     if root:
         exec_args = [
             "-it",
+            "--user", "root",
             "--workdir", "/root",
             "-e", "HOME=/root",
             "-e", "USER=root",
