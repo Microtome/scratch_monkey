@@ -199,7 +199,9 @@ class TestExecShell:
     def test_exec_as_root(self, scratch_instance, mock_runner):
         exec_shell(scratch_instance, mock_runner, "myinstance-overlay", root=True)
         args = mock_runner._run.call_args[0][0]
-        assert "--user" not in args
+        assert "--user" in args
+        user_idx = args.index("--user")
+        assert args[user_idx + 1] == "root"
         assert "/root" in args
 
     def test_passes_cmd(self, scratch_instance, mock_runner):
