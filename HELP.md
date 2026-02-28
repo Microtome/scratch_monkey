@@ -1,12 +1,34 @@
 # scratch-monkey: How It Works
 
-A deep dive into the architecture and features of scratch-monkey,
-a Podman-based dev container manager for rootless Fedora/ostree systems.
+## Introduction
+
+scratch-monkey is a dev container manager built on rootless Podman, designed
+for Fedora Atomic / ostree systems (Silverblue, Kinoite, Bazzite, etc.) where
+the host OS is immutable.
+
+Instead of layering packages onto the host with `rpm-ostree`, scratch-monkey
+lets you spin up lightweight, disposable dev environments as Podman containers.
+Each environment — called an **instance** — gets its own home directory,
+Dockerfile, and TOML config file. You can enter and exit instances in
+seconds, customize them freely, and throw them away without affecting your host.
+
+Two base image types are available:
+
+- **Scratch** instances bind-mount your host `/usr` and `/etc` read-only into
+  an empty container — near-zero build time, instant startup, access to all
+  host-installed tools.
+- **Fedora** instances use a full `fedora:latest` image — self-contained,
+  with their own `dnf`, isolated from the host.
+
+Additional features include persistent overlay containers, shared volumes
+for inter-instance communication, GPU/device passthrough, command export
+to make container tools available on the host PATH, and an optional Qt GUI.
 
 ---
 
 ## Table of Contents
 
+- [Installation](#installation)
 - [Core Concepts](#core-concepts)
 - [Base Image Architecture](#base-image-architecture)
 - [Instance Lifecycle](#instance-lifecycle)
@@ -21,24 +43,111 @@ a Podman-based dev container manager for rootless Fedora/ostree systems.
 
 ---
 
+## Installation
+
+### Prerequisites
+
+- **Podman** (rootless) — comes pre-installed on Fedora Atomic desktops
+- **Python 3.11+**
+- **uv** (Python package manager) — the install script will offer to install
+  it if missing
+
+### Install from source
+
+Clone the repository and run the install script:
+
+```bash
+git clone https://github.com/djoyce/scratch-monkey.git
+cd scratch-monkey
+./install.sh
+```
+
+The install script:
+
+```mermaid
+graph TD
+    A["./install.sh"] --> B{"uv installed?"}
+    B -->|No| C["Prompt to install uv<br/>(curl from astral.sh)"]
+    C --> D["uv tool install --editable ."]
+    B -->|Yes| D
+    D --> E["Check ~/.local/bin in PATH"]
+    E --> F["Create ~/.config/scratch-monkey/"]
+    F --> G["Done!"]
+```
+
+1. Checks for `uv` and offers to install it if missing
+2. Runs `uv tool install --editable .` to install the CLI
+3. Warns if `~/.local/bin` is not in your `PATH`
+4. Creates the config directory at `~/.config/scratch-monkey/`
+
+### Install with GUI
+
+Pass `--gui` to include the Qt6/Enaml GUI dependencies:
+
+```bash
+./install.sh --gui
+```
+
+Or manually:
+
+```bash
+uv tool install --editable ".[gui]"
+```
+
+### Manual install (without install.sh)
+
+If you already have `uv`:
+
+```bash
+git clone https://github.com/djoyce/scratch-monkey.git
+cd scratch-monkey
+
+# CLI only
+uv tool install --editable .
+
+# With GUI
+uv tool install --editable ".[gui]"
+```
+
+### Verify installation
+
+```bash
+scratch-monkey --help
+```
+
+### Quick start
+
+```bash
+# Create a scratch-based instance
+scratch-monkey create myproject
+
+# Or a fedora-based instance with your shell configs
+scratch-monkey create myproject --fedora --skel
+
+# Enter the instance
+scratch-monkey enter myproject
+```
+
+---
+
 ## Core Concepts
 
 scratch-monkey manages **instances** — named dev environments backed by Podman
 containers. Each instance has its own home directory, Dockerfile, config, and
 optional persistent overlay.
 
-```
-                        scratch-monkey
-                              |
-              +---------------+---------------+
-              |                               |
-        scratch instances              fedora instances
-              |                               |
-     host /usr, /etc mounted        self-contained fedora:latest
-     read-only into container       own package manager, own /usr
-              |                               |
-     near-zero image size             full OS in image
-     instant startup                  slower build, more flexible
+```mermaid
+graph TD
+    SM[scratch-monkey] --> S[Scratch Instances]
+    SM --> F[Fedora Instances]
+
+    S --> S1["Host /usr, /etc mounted read-only"]
+    S --> S2["Near-zero image size"]
+    S --> S3["Instant startup"]
+
+    F --> F1["Self-contained fedora:latest"]
+    F --> F2["Own package manager"]
+    F --> F3["Slower build, more flexible"]
 ```
 
 There are two fundamentally different base image types:
@@ -63,50 +172,53 @@ The scratch image is built with a multi-stage Dockerfile. A Fedora builder
 creates a minimal rootfs with symlinks that match Fedora's ostree layout,
 then copies it into an empty `FROM scratch` image.
 
-```
-+------------------------------------------+
-|  Stage 1: fedora:latest (builder)        |
-|                                          |
-|  mkdir /rootfs/var/home                  |
-|  mkdir /rootfs/var/opt                   |
-|  mkdir /rootfs/var/usrlocal              |
-|  mkdir /rootfs/usr                       |
-|                                          |
-|  Symlinks:                               |
-|    /bin    -> usr/bin                     |
-|    /sbin   -> usr/sbin                   |
-|    /lib    -> usr/lib                    |
-|    /lib64  -> usr/lib64                  |
-|    /opt    -> var/opt                    |
-|    /home   -> var/home                   |
-+------------------------------------------+
-                    |
-                    v  COPY --from=builder
-+------------------------------------------+
-|  Stage 2: FROM scratch                   |
-|                                          |
-|  Contains only:                          |
-|    /usr/          (empty dir)            |
-|    /var/home/     (empty dir)            |
-|    /var/opt/      (empty dir)            |
-|    /var/usrlocal/ (empty dir)            |
-|    + symlinks above                      |
-|                                          |
-|  No shell. No binaries. No OS.          |
-+------------------------------------------+
+```mermaid
+graph TD
+    subgraph stage1["Stage 1: fedora:latest (builder)"]
+        B1["mkdir /rootfs/var/home"]
+        B2["mkdir /rootfs/var/opt"]
+        B3["mkdir /rootfs/var/usrlocal"]
+        B4["mkdir /rootfs/usr"]
+        B5["Symlinks:<br/>/bin → usr/bin<br/>/sbin → usr/sbin<br/>/lib → usr/lib<br/>/lib64 → usr/lib64<br/>/opt → var/opt<br/>/home → var/home"]
+    end
+
+    stage1 -->|"COPY --from=builder"| stage2
+
+    subgraph stage2["Stage 2: FROM scratch"]
+        R1["/usr/ (empty dir)"]
+        R2["/var/home/ (empty dir)"]
+        R3["/var/opt/ (empty dir)"]
+        R4["/var/usrlocal/ (empty dir)"]
+        R5["+ symlinks from stage 1"]
+        R6["No shell. No binaries. No OS."]
+    end
 ```
 
 At runtime, the host filesystem fills these empty directories:
 
-```
-Container view (scratch instance)
-==================================
+```mermaid
+graph LR
+    subgraph host["Host (read-only)"]
+        H1["/usr"]
+        H2["/etc"]
+        H3["/var/usrlocal"]
+        H4["/var/opt"]
+    end
 
-/usr/       <-- host /usr mounted read-only
-/etc/       <-- host /etc mounted read-only
-/usr/local/ <-- host /var/usrlocal mounted read-only
-/var/opt/   <-- host /var/opt mounted read-only
-/home/user/ <-- instance home/ mounted read-write
+    subgraph container["Scratch Container"]
+        C1["/usr/"]
+        C2["/etc/"]
+        C3["/usr/local/"]
+        C4["/var/opt/"]
+        C5["/home/user/"]
+    end
+
+    H1 -->|mount ro| C1
+    H2 -->|mount ro| C2
+    H3 -->|mount ro| C3
+    H4 -->|mount ro| C4
+
+    HOME["instance home/ (read-write)"] -->|mount rw| C5
 ```
 
 ### Fedora base image
@@ -114,13 +226,11 @@ Container view (scratch instance)
 Just `FROM fedora:latest`. A complete OS. Only the instance home directory
 is mounted from the host.
 
-```
-Container view (fedora instance)
-==================================
-
-/usr/       <-- from fedora:latest image layer
-/etc/       <-- from fedora:latest image layer
-/home/user/ <-- instance home/ mounted read-write
+```mermaid
+graph LR
+    IMG["fedora:latest image layers"] -->|provides| C1["/usr/"]
+    IMG -->|provides| C2["/etc/"]
+    HOME["instance home/ (read-write)"] -->|mount rw| C3["/home/user/"]
 ```
 
 ### Instance image layering
@@ -128,14 +238,13 @@ Container view (fedora instance)
 When you customize an instance's Dockerfile and run `build-instance`,
 a new image layer is added on top of the base:
 
-```
-+-------------------------------+
-|  Instance layer               |  <-- scratch-monkey build-instance myproject
-|  (user's custom Dockerfile)   |
-+-------------------------------+
-|  Base image                   |  <-- scratch_dev or scratch_dev_fedora
-|  (scratch or fedora)          |
-+-------------------------------+
+```mermaid
+graph TD
+    IL["Instance layer<br/>(user's custom Dockerfile)"]
+    BI["Base image<br/>(scratch or fedora)"]
+    IL --- BI
+
+    CMD["scratch-monkey build-instance myproject"] -.->|creates| IL
 ```
 
 For scratch instances, the Dockerfile can't use `RUN` (no shell).
@@ -187,14 +296,17 @@ Each instance lives at `~/scratch-monkey/<name>/`:
 scratch-monkey create myproject [--fedora] [--skel]
 ```
 
-```
-1. Validate name (alphanumeric start, then alphanum/underscore/dot/dash)
-2. Create directory: ~/scratch-monkey/myproject/
-3. Create subdirectory: home/
-4. Copy scratch.toml.default -> scratch.toml
-5. Generate Dockerfile (scratch or fedora template)
-6. Create empty .env file
-7. (--skel) Copy /etc/skel dotfiles into home/
+```mermaid
+graph TD
+    A["validate name"] --> B["Create directory:<br/>~/scratch-monkey/myproject/"]
+    B --> C["Create subdirectory: home/"]
+    C --> D["Copy scratch.toml.default → scratch.toml"]
+    D --> E["Generate Dockerfile<br/>(scratch or fedora template)"]
+    E --> F["Create empty .env file"]
+    F --> G{"--skel?"}
+    G -->|yes| H["Copy /etc/skel dotfiles into home/"]
+    G -->|no| I["Done"]
+    H --> I
 ```
 
 ### Clone
@@ -203,13 +315,13 @@ scratch-monkey create myproject [--fedora] [--skel]
 scratch-monkey clone myproject myproject-copy
 ```
 
-```
-1. Validate dest name
-2. Create dest directory + home/
-3. Copy source Dockerfile, scratch.toml, .env
-4. Clear overlay_id in dest config (prevent shared overlay)
-5. Tag source image for dest (if image exists)
-6. home/ starts fresh (not copied)
+```mermaid
+graph TD
+    A["Validate dest name"] --> B["Create dest directory + home/"]
+    B --> C["Copy source Dockerfile,<br/>scratch.toml, .env"]
+    C --> D["Clear overlay_id in dest config<br/>(prevent shared overlay)"]
+    D --> E["Tag source image for dest<br/>(if image exists)"]
+    E --> F["home/ starts fresh (not copied)"]
 ```
 
 ### Delete
@@ -218,10 +330,10 @@ scratch-monkey clone myproject myproject-copy
 scratch-monkey delete myproject [--yes]
 ```
 
-```
-1. Remove overlay container (if any)
-2. Remove podman image (if any)
-3. Remove instance directory tree
+```mermaid
+graph TD
+    A["Remove overlay container (if any)"] --> B["Remove podman image (if any)"]
+    B --> C["Remove instance directory tree"]
 ```
 
 ### Rename
@@ -239,39 +351,48 @@ is decoupled from the instance name, so overlays survive renames.
 
 When you run `scratch-monkey enter myproject`, this is what happens:
 
-```
-+------------------------------------------------------------------+
-|                    podman run arguments                           |
-+------------------------------------------------------------------+
-| --rm -it                          interactive, remove on exit    |
-| --security-opt label=disable      disable SELinux labeling       |
-| --network=host                    host networking                |
-| --userns=keep-id                  rootless UID mapping           |
-| --hostname myproject.myhostname   instance.host for prompts     |
-+------------------------------------------------------------------+
-| -e HOME=/home/user                                               |
-| -e USER=user                                                     |
-| -e SCRATCH_INSTANCE=myproject                                    |
-| --workdir /home/user                                             |
-+------------------------------------------------------------------+
-| MOUNTS (scratch)           | MOUNTS (fedora)                    |
-|  -v /usr:/usr:ro           |  (none — self-contained)           |
-|  -v /etc:/etc:ro           |                                    |
-|  -v /var/usrlocal:...:ro   |                                    |
-|  -v /var/opt:/var/opt:ro   |                                    |
-+------------------------------------------------------------------+
-| -v ~/scratch-monkey/myproject/home:/home/user     (always)       |
-| --env-file .env                                   (if exists)    |
-+------------------------------------------------------------------+
-| OPTIONAL (from scratch.toml)                                     |
-|  -v wayland_socket    (wayland = true)                           |
-|  -v SSH_AUTH_SOCK     (ssh = true)                               |
-|  -v host:container    (volumes = [...])                          |
-|  -e KEY=value         (env = [...])                              |
-|  -v shared:/shared/x  (shared = [...])                           |
-|  --device /dev/dri    (gpu = true)                               |
-|  --device /dev/path   (devices = [...])                          |
-+------------------------------------------------------------------+
+```mermaid
+graph TD
+    subgraph always["Always set"]
+        A1["--rm -it (interactive, remove on exit)"]
+        A2["--security-opt label=disable"]
+        A3["--network=host"]
+        A4["--userns=keep-id (rootless UID mapping)"]
+        A5["--hostname instance.hostname"]
+        A6["-e HOME, USER, SCRATCH_INSTANCE"]
+        A7["--workdir /home/user"]
+    end
+
+    subgraph mounts["Mounts"]
+        direction LR
+        subgraph scratch_mounts["Scratch"]
+            M1["/usr:/usr:ro"]
+            M2["/etc:/etc:ro"]
+            M3["/var/usrlocal:...:ro"]
+            M4["/var/opt:/var/opt:ro"]
+        end
+        subgraph fedora_mounts["Fedora"]
+            M5["(none — self-contained)"]
+        end
+    end
+
+    subgraph common["Common mounts"]
+        M6["instance home/ → /home/user"]
+        M7["--env-file .env (if exists)"]
+    end
+
+    subgraph optional["Optional (from scratch.toml)"]
+        O1["wayland socket (wayland = true)"]
+        O2["SSH_AUTH_SOCK (ssh = true)"]
+        O3["host:container volumes"]
+        O4["KEY=value env vars"]
+        O5["shared:/shared/x"]
+        O6["--device /dev/... (gpu/devices)"]
+    end
+
+    always --> mounts
+    mounts --> common
+    common --> optional
 ```
 
 ---
@@ -284,17 +405,13 @@ outside home/) persist without rebuilding the image.
 
 ### Without overlay (default)
 
-```
-scratch-monkey enter myproject
-
-+-------------------+
-| podman run --rm   |   Container is created, you work in it,
-| -it myproject     |   it's destroyed when you exit.
-| /bin/bash         |   Only home/ persists (bind mount).
-+-------------------+
-       |
-       v
-  [container destroyed on exit]
+```mermaid
+graph LR
+    A["scratch-monkey enter myproject"] --> B["podman run --rm -it"]
+    B --> C["Work inside container"]
+    C --> D["Exit"]
+    D --> E["Container destroyed"]
+    E --> F["Only home/ persists<br/>(bind mount)"]
 ```
 
 Every `enter` starts fresh from the image. Anything written outside
@@ -307,40 +424,39 @@ the home directory is lost.
 overlay = true
 ```
 
-```
-First enter:
+```mermaid
+graph TD
+    ENTER["scratch-monkey enter myproject"] --> CHECK{"Overlay container<br/>exists?"}
 
-  scratch-monkey enter myproject
+    CHECK -->|No| CREATE["Create daemon container:<br/>podman run -d --name sm-a1b2c3d4<br/>... sleep infinity"]
+    CREATE --> FEDORA{"Fedora-based?"}
+    FEDORA -->|Yes| SETUP["Setup user: useradd, sudoers"]
+    FEDORA -->|No| EXEC
+    SETUP --> EXEC["podman exec -it sm-a1b2c3d4 /bin/bash"]
 
-  1. No overlay container exists yet
-  2. Create daemon: podman run -d --name sm-a1b2c3d4 ... sleep infinity
-  3. (fedora only) Setup user: useradd, sudoers
-  4. Exec into it: podman exec -it sm-a1b2c3d4 /bin/bash
+    CHECK -->|Yes| RUNNING{"Running?"}
+    RUNNING -->|No| START["podman start sm-a1b2c3d4"]
+    START --> EXEC
+    RUNNING -->|Yes| EXEC
 
-
-Subsequent enters:
-
-  scratch-monkey enter myproject
-
-  1. Overlay container sm-a1b2c3d4 exists
-  2. If stopped, start it
-  3. Exec into it: podman exec -it sm-a1b2c3d4 /bin/bash
-
-
-All sessions share the same container state.
-Package installs, config changes outside home/ all persist.
+    EXEC --> SESSION["Interactive session<br/>All changes persist in container"]
 ```
 
-```
-                  Image layers                    Overlay container
-               +------------------+          +------------------------+
-               |  Instance layer  |   --->   |  Writable layer        |
-               +------------------+   used   |  (dnf installs, etc.)  |
-               |  Base image      |   as     |                        |
-               +------------------+  base    +------------------------+
-                                             |  Container filesystem  |
-                                             |  persists across runs  |
-                                             +------------------------+
+```mermaid
+graph TD
+    subgraph image["Image Layers"]
+        IL["Instance layer"]
+        BI["Base image"]
+        IL --- BI
+    end
+
+    image -->|"used as base"| overlay
+
+    subgraph overlay["Overlay Container"]
+        WL["Writable layer<br/>(dnf installs, config changes, etc.)"]
+        CF["Container filesystem<br/>persists across runs"]
+        WL --- CF
+    end
 ```
 
 ### Overlay user setup (fedora only)
@@ -348,11 +464,9 @@ Package installs, config changes outside home/ all persist.
 When a fedora overlay container starts for the first time, scratch-monkey
 sets up the user inside it:
 
-```
-1. dnf install -y sudo          (if not present)
-2. useradd -u <host_uid> -M -s /bin/bash <username>
-3. echo "<user> ALL=(ALL) NOPASSWD:ALL" > /etc/sudoers.d/<user>
-```
+1. `dnf install -y sudo` (if not present)
+2. `useradd -u <host_uid> -M -s /bin/bash <username>`
+3. `echo "<user> ALL=(ALL) NOPASSWD:ALL" > /etc/sudoers.d/<user>`
 
 This is skipped for scratch instances because host `/etc` is bind-mounted
 read-only — the host user and sudo config are already visible.
@@ -392,17 +506,20 @@ scratch-monkey share add comms agent1
 scratch-monkey share add comms agent2
 ```
 
-```
-  agent1 container                    agent2 container
-  +-------------------+              +-------------------+
-  |                   |              |                   |
-  | /shared/comms/ ------+     +------- /shared/comms/  |
-  |                   |  |     |     |                   |
-  +-------------------+  |     |     +-------------------+
-                         v     v
-                   +-------------------+
-                   | ~/.../shared/comms |  (host directory)
-                   +-------------------+
+```mermaid
+graph TD
+    subgraph agent1["agent1 container"]
+        A1["/shared/comms/"]
+    end
+
+    subgraph agent2["agent2 container"]
+        A2["/shared/comms/"]
+    end
+
+    HOST["Host: ~/.../shared/comms"]
+
+    A1 <-->|mount| HOST
+    A2 <-->|mount| HOST
 ```
 
 Mode control in `scratch.toml`:
@@ -425,22 +542,17 @@ scratch-monkey export myproject /usr/bin/rg
 
 This creates `~/.local/bin/rg` — a wrapper script with three execution paths:
 
-```
-~/.local/bin/rg is invoked
-        |
-        v
-+-- Already inside myproject? --+
-|   (SCRATCH_INSTANCE == name)  |
-|           |                   |
-|     yes   |             no    |
-|     exec  |                   |
-|     /usr/bin/rg         +-- Overlay running? --+
-|     directly            |         |            |
-|                   yes   |            no        |
-|                   podman exec        podman run --rm
-|                   into overlay       one-shot container
-|                   run /usr/bin/rg    run /usr/bin/rg
-+-----------------------------------------------+
+```mermaid
+graph TD
+    INVOKE["~/.local/bin/rg is invoked"] --> INSIDE{"Already inside<br/>myproject?<br/>(SCRATCH_INSTANCE == name)"}
+
+    INSIDE -->|Yes| DIRECT["exec /usr/bin/rg directly"]
+
+    INSIDE -->|No| OVERLAY{"Overlay<br/>running?"}
+
+    OVERLAY -->|Yes| EXEC["podman exec<br/>into overlay<br/>run /usr/bin/rg"]
+
+    OVERLAY -->|No| RUN["podman run --rm<br/>one-shot container<br/>run /usr/bin/rg"]
 ```
 
 Remove with `scratch-monkey unexport rg`.
@@ -522,51 +634,48 @@ scratch-monkey gui
 
 The GUI provides a graphical interface to all instance management features.
 
-```
-+------------------------------------------------------------------+
-| scratch-monkey                              [New Instance] [Refresh] |
-+------------------------------------------------------------------+
-|                    |                                              |
-|  Instance List     |  Instance Detail                            |
-|                    |                                              |
-|  * fedora-dev  [C][R][X] |  fedora-dev                          |
-|    myproject   [C][R][X] |  Path: ~/scratch-monkey/fedora-dev   |
-|    tools       [C][R][X] |  Base: scratch_dev_fedora             |
-|                    |                                              |
-|                    |  Actions                                    |
-|                    |  [Enter] [Enter as Root] [Build] [Reset]    |
-|                    |  [Export Cmd] [Edit Dockerfile] [Edit .env]  |
-|                    |  [Edit Config]                               |
-|                    |                                              |
-|                    |  [====== Save Config ======] [Cancel Changes]|
-|                    |                                              |
-|                    |  Configuration                               |
-|                    |  Command: [/bin/bash           ]             |
-|                    |  Home:    [/home/dev            ]            |
-|                    |  [ ] Wayland  [ ] SSH Agent                  |
-|                    |  [ ] Overlay  [ ] GPU Passthrough             |
-|                    |                                              |
-|                    |  Volume Mounts                               |
-|                    |  [host path] [container path] [rw v] [X]    |
-|                    |  [+ Add Volume Mount]                        |
-|                    |                                              |
-|                    |  Environment Variables                       |
-|                    |  [KEY] [value                        ] [X]   |
-|                    |  [+ Add Environment Variable]                |
-|                    |                                              |
-|                    |  Devices                                     |
-|                    |  [/dev/video0                        ] [X]   |
-|                    |  [+ Add Device]                              |
-|                    |                                              |
-|                    |  Shared Volumes                              |
-|                    |  [x] comms [rw v]                           |
-|                    |  [ ] data  [rw v]                           |
-|                    |  [+ New Shared Volume]                       |
-|                    |                                              |
-|  [+ New Instance]  |                                              |
-+------------------------------------------------------------------+
-| Loaded 3 instance(s)                                             |
-+------------------------------------------------------------------+
+```mermaid
+graph TD
+    subgraph window["scratch-monkey GUI"]
+        direction LR
+        subgraph left["Instance List"]
+            I1["fedora-dev [C][R][X]"]
+            I2["myproject [C][R][X]"]
+            I3["tools [C][R][X]"]
+            NI["[+ New Instance]"]
+        end
+
+        subgraph right["Instance Detail"]
+            TITLE["fedora-dev<br/>Path: ~/scratch-monkey/fedora-dev<br/>Base: scratch_dev_fedora"]
+
+            subgraph actions["Actions"]
+                ROW1["[Enter] [Enter as Root] [Build] [Reset]"]
+                ROW2["[Export Cmd] [Edit Dockerfile] [Edit .env] [Edit Config]"]
+            end
+
+            SAVE["[Save Config] [Cancel Changes]"]
+
+            subgraph config["Configuration"]
+                CFG["Command / Home / Wayland / SSH<br/>Overlay / GPU Passthrough"]
+            end
+
+            subgraph volumes["Volume Mounts"]
+                VOL["[host path] [container path] [rw] [X]<br/>[+ Add Volume Mount]"]
+            end
+
+            subgraph envvars["Environment Variables"]
+                ENV["[KEY] [value] [X]<br/>[+ Add Environment Variable]"]
+            end
+
+            subgraph devices["Devices"]
+                DEV["[/dev/video0] [X]<br/>[+ Add Device]"]
+            end
+
+            subgraph shared["Shared Volumes"]
+                SHR["[x] comms [rw]<br/>[ ] data [rw]<br/>[+ New Shared Volume]"]
+            end
+        end
+    end
 ```
 
 ### Key features
