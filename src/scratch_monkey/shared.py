@@ -6,7 +6,7 @@ import shutil
 from dataclasses import dataclass
 from pathlib import Path
 
-from .config import load, save
+from .config import ConfigError, load, save, validate_name
 from .instance import Instance
 
 
@@ -35,8 +35,13 @@ def create_shared(name: str, instances_dir: Path) -> Path:
     """Create a shared volume directory.
 
     Returns the path to the new shared volume.
-    Raises SharedError if it already exists.
+    Raises SharedError if it already exists or the name is invalid.
     """
+    try:
+        validate_name(name)
+    except ConfigError as e:
+        raise SharedError(str(e)) from e
+
     instances_dir = Path(instances_dir)
     vol_dir = _shared_dir(instances_dir, name)
     if vol_dir.exists():
@@ -51,8 +56,13 @@ def delete_shared(name: str, instances_dir: Path) -> None:
     """Delete a shared volume directory.
 
     Also removes the volume from all instance configs atomically.
-    Raises SharedError if the volume does not exist.
+    Raises SharedError if the volume does not exist or the name is invalid.
     """
+    try:
+        validate_name(name)
+    except ConfigError as e:
+        raise SharedError(str(e)) from e
+
     instances_dir = Path(instances_dir)
     vol_dir = _shared_dir(instances_dir, name)
     if not vol_dir.exists():

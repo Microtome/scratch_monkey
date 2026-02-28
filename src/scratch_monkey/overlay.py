@@ -2,131 +2,27 @@
 
 from __future__ import annotations
 
+import logging
 import os
 import sys
 
 from .config import generate_overlay_id, save
 from .container import PodmanError, PodmanRunner
 from .instance import Instance, is_fedora_based
-from .shared import parse_shared_entry
+from .run_args import build_run_args
+
+logger = logging.getLogger(__name__)
 
 
 class OverlayError(Exception):
     """Raised for overlay container operation errors."""
 
 
-def _gpu_devices() -> list[str]:
-    """Detect available GPU device paths."""
-    devices = []
-    if os.path.exists("/dev/dri"):
-        devices.append("/dev/dri")
-    if os.path.exists("/dev/kfd"):
-        devices.append("/dev/kfd")
-    # NVIDIA devices
-    for name in ("nvidia0", "nvidiactl", "nvidia-modeset", "nvidia-uvm", "nvidia-uvm-tools"):
-        path = f"/dev/{name}"
-        if os.path.exists(path):
-            devices.append(path)
-    return devices
-
-
-def _overlay_name(instance: Instance) -> str:
+def _ensure_overlay_id(instance: Instance) -> str:
     if not instance.config.overlay_id:
         instance.config.overlay_id = generate_overlay_id()
         save(instance.directory / "scratch.toml", instance.config)
     return instance.config.overlay_id
-
-
-def _build_run_args(instance: Instance) -> list[str]:
-    """Build the podman run arguments for an overlay container."""
-    cfg = instance.config
-    container_home = f"/home/{os.environ.get('USER', 'user')}"
-
-    args = [
-        "--security-opt", "label=disable",
-        "--network", "host",
-        "--hostname", f"{instance.name}.{_short_hostname()}",
-        "--userns=keep-id",
-        "-e", f"HOME={container_home}",
-        "-e", f"USER={os.environ.get('USER', 'user')}",
-        "-e", f"SCRATCH_INSTANCE={instance.name}",
-        "-v", f"{instance.home_dir}:{container_home}",
-    ]
-
-    # Host system mounts for scratch-based (non-fedora) instances
-    if not is_fedora_based(instance.directory):
-        args += [
-            "-v", "/usr:/usr:ro",
-            "-v", "/etc:/etc:ro",
-            "-v", "/var/usrlocal:/var/usrlocal:ro",
-            "-v", "/var/opt:/var/opt:ro",
-            "-v", "/var/usrlocal:/usr/local:ro",
-        ]
-
-    # Wayland
-    if cfg.wayland:
-        uid = os.getuid()
-        wayland_sock = f"/run/user/{uid}/wayland-0"
-        if os.path.exists(wayland_sock):
-            args += [
-                "-v", f"{wayland_sock}:{wayland_sock}",
-                "-e", "WAYLAND_DISPLAY=wayland-0",
-                "-e", f"XDG_RUNTIME_DIR=/run/user/{uid}",
-            ]
-
-    # SSH
-    if cfg.ssh:
-        ssh_sock = os.environ.get("SSH_AUTH_SOCK", "")
-        if ssh_sock and os.path.exists(ssh_sock):
-            args += [
-                "-v", f"{ssh_sock}:{ssh_sock}",
-                "-e", f"SSH_AUTH_SOCK={ssh_sock}",
-            ]
-
-    # .env file
-    env_file = instance.directory / ".env"
-    if env_file.exists():
-        args += ["--env-file", str(env_file)]
-
-    # Extra volumes
-    for vol in cfg.volumes:
-        args += ["-v", vol]
-
-    # Shared volumes
-    instances_dir = instance.directory.parent
-    for shared_entry in cfg.shared:
-        shared_name, mode = parse_shared_entry(shared_entry)
-        shared_path = instances_dir / ".shared" / shared_name
-        if shared_path.is_dir():
-            mount_spec = f"{shared_path}:/shared/{shared_name}"
-            if mode == "ro":
-                mount_spec += ":ro"
-            args += ["-v", mount_spec]
-        else:
-            print(
-                f"Warning: shared volume {shared_name!r} not found, skipping.",
-                file=sys.stderr,
-            )
-
-    # Extra env vars
-    for var in cfg.env:
-        args += ["-e", var]
-
-    # GPU passthrough
-    if cfg.gpu:
-        for dev in _gpu_devices():
-            args += ["--device", dev]
-
-    # Extra devices
-    for dev in cfg.devices:
-        args += ["--device", dev]
-
-    return args
-
-
-def _short_hostname() -> str:
-    import socket
-    return socket.gethostname().split(".")[0]
 
 
 def ensure_running(
@@ -142,10 +38,12 @@ def ensure_running(
     For fedora-based instances, creates the host user and grants sudo.
     For scratch-based instances, skips user setup entirely.
     """
-    container_name = _overlay_name(instance)
+    container_name = _ensure_overlay_id(instance)
 
     if not runner.container_exists(container_name):
-        run_args = _build_run_args(instance)
+        run_args, warnings = build_run_args(instance)
+        for w in warnings:
+            print(f"Warning: {w}", file=sys.stderr)
         runner.run_daemon(container_name, image, run_args)
 
         # User setup is only needed for fedora-based instances.
@@ -172,8 +70,8 @@ def _setup_fedora_user(container_name: str, runner: PodmanRunner) -> None:
             ["bash", "-c", "rpm -q sudo &>/dev/null || dnf install -y sudo"],
             user="root",
         )
-    except PodmanError:
-        pass  # best-effort
+    except PodmanError as exc:
+        logger.debug("sudo install skipped: %s", exc)
 
     # Create user (ignore error if already exists)
     try:
@@ -182,18 +80,20 @@ def _setup_fedora_user(container_name: str, runner: PodmanRunner) -> None:
             ["useradd", "-u", str(uid), "-M", "-s", "/bin/bash", username],
             user="root",
         )
-    except PodmanError:
-        pass  # user may already exist
+    except PodmanError as exc:
+        logger.debug("useradd skipped (user may exist): %s", exc)
 
-    # Grant passwordless sudo
-    sudoers_line = f"{username} ALL=(ALL) NOPASSWD: ALL"
+    # Grant passwordless sudo — use tee to avoid shell interpolation of username
+    sudoers_line = f"{username} ALL=(ALL) NOPASSWD: ALL\n"
     runner.exec_capture(
         container_name,
-        [
-            "bash", "-c",
-            f"echo '{sudoers_line}' > /etc/sudoers.d/{username} "
-            f"&& chmod 440 /etc/sudoers.d/{username}",
-        ],
+        ["tee", f"/etc/sudoers.d/{username}"],
+        user="root",
+        input=sudoers_line,
+    )
+    runner.exec_capture(
+        container_name,
+        ["chmod", "440", f"/etc/sudoers.d/{username}"],
         user="root",
     )
 
@@ -222,7 +122,6 @@ def exec_shell(
             "-e", "HOME=/root",
             "-e", "USER=root",
             "-e", f"SCRATCH_INSTANCE={instance.name}",
-            container_name,
             cmd,
         ]
     else:
@@ -233,11 +132,10 @@ def exec_shell(
             "-e", f"HOME={container_home}",
             "-e", f"USER={user}",
             "-e", f"SCRATCH_INSTANCE={instance.name}",
-            container_name,
             cmd,
         ]
 
-    runner._run(["exec", *exec_args], capture=False)
+    runner.exec_interactive(container_name, exec_args)
 
 
 def reset(instance: Instance, runner: PodmanRunner) -> bool:
@@ -245,7 +143,7 @@ def reset(instance: Instance, runner: PodmanRunner) -> bool:
 
     Returns True if a container was removed, False if none existed.
     """
-    container_name = _overlay_name(instance)
+    container_name = _ensure_overlay_id(instance)
     if not runner.container_exists(container_name):
         return False
     runner.remove(container_name, force=True)

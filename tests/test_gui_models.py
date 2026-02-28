@@ -286,11 +286,11 @@ class TestAppModelCreateInstance:
         runner.container_running.return_value = False
         runner.image_exists.return_value = False
 
-        # Patch _PROJECT_DIR to use a temp dir with scratch.toml.default
+        # Patch PROJECT_DIR to use a temp dir with scratch.toml.default
         project_dir = tmp_path / "project"
         project_dir.mkdir()
 
-        with patch("scratch_monkey.gui.models._PROJECT_DIR", project_dir):
+        with patch("scratch_monkey.gui.models.PROJECT_DIR", project_dir):
             app = AppModel(instances_dir=instances_dir, runner=runner)
 
         return app, instances_dir, project_dir
@@ -301,7 +301,7 @@ class TestAppModelCreateInstance:
         app, instances_dir, project_dir = self._make_app(tmp_path)
         assert len(app.instances) == 0
 
-        with patch("scratch_monkey.gui.models._PROJECT_DIR", project_dir):
+        with patch("scratch_monkey.gui.models.PROJECT_DIR", project_dir):
             result = app.create_instance("myinst")
 
         assert result == ""
@@ -315,7 +315,7 @@ class TestAppModelCreateInstance:
 
         app, instances_dir, project_dir = self._make_app(tmp_path)
 
-        with patch("scratch_monkey.gui.models._PROJECT_DIR", project_dir):
+        with patch("scratch_monkey.gui.models.PROJECT_DIR", project_dir):
             result = app.create_instance("bad name!")
 
         assert result != ""
@@ -326,7 +326,7 @@ class TestAppModelCreateInstance:
 
         app, instances_dir, project_dir = self._make_app(tmp_path)
 
-        with patch("scratch_monkey.gui.models._PROJECT_DIR", project_dir):
+        with patch("scratch_monkey.gui.models.PROJECT_DIR", project_dir):
             app.create_instance("dup")
             result = app.create_instance("dup")
 
@@ -337,7 +337,7 @@ class TestAppModelCreateInstance:
 
         app, instances_dir, project_dir = self._make_app(tmp_path)
 
-        with patch("scratch_monkey.gui.models._PROJECT_DIR", project_dir):
+        with patch("scratch_monkey.gui.models.PROJECT_DIR", project_dir):
             result = app.create_instance("fed", fedora=True)
 
         assert result == ""
@@ -349,7 +349,7 @@ class TestAppModelCreateInstance:
 
         app, instances_dir, project_dir = self._make_app(tmp_path)
 
-        with patch("scratch_monkey.gui.models._PROJECT_DIR", project_dir):
+        with patch("scratch_monkey.gui.models.PROJECT_DIR", project_dir):
             app.create_instance("first")
             app.create_instance("second")
 
@@ -364,7 +364,7 @@ class TestAppModelCreateInstance:
 
         custom_cfg = InstanceConfig(cmd="/bin/zsh", wayland=True, env=["EDITOR=vim"])
 
-        with patch("scratch_monkey.gui.models._PROJECT_DIR", project_dir):
+        with patch("scratch_monkey.gui.models.PROJECT_DIR", project_dir):
             result = app.create_instance("configured", config=custom_cfg)
 
         assert result == ""
@@ -380,7 +380,7 @@ class TestAppModelCreateInstance:
 
         app, instances_dir, project_dir = self._make_app(tmp_path)
 
-        with patch("scratch_monkey.gui.models._PROJECT_DIR", project_dir):
+        with patch("scratch_monkey.gui.models.PROJECT_DIR", project_dir):
             result = app.create_instance("default-cfg")
 
         assert result == ""
@@ -397,7 +397,7 @@ class TestAppModelCreateInstance:
         shared_dir.mkdir()
         (shared_dir / "comms").mkdir()
 
-        with patch("scratch_monkey.gui.models._PROJECT_DIR", project_dir):
+        with patch("scratch_monkey.gui.models.PROJECT_DIR", project_dir):
             app.refresh()
             m = app.new_instance_model()
 
@@ -423,7 +423,7 @@ class TestAppModelCreateSharedVolume:
         project_dir = tmp_path / "project"
         project_dir.mkdir()
 
-        with patch("scratch_monkey.gui.models._PROJECT_DIR", project_dir):
+        with patch("scratch_monkey.gui.models.PROJECT_DIR", project_dir):
             app = AppModel(instances_dir=instances_dir, runner=runner)
 
         return app, instances_dir, project_dir
@@ -433,7 +433,7 @@ class TestAppModelCreateSharedVolume:
 
         app, instances_dir, project_dir = self._make_app(tmp_path)
 
-        with patch("scratch_monkey.gui.models._PROJECT_DIR", project_dir):
+        with patch("scratch_monkey.gui.models.PROJECT_DIR", project_dir):
             result = app.create_shared_volume("mydata")
 
         assert result == ""
@@ -445,7 +445,7 @@ class TestAppModelCreateSharedVolume:
 
         app, instances_dir, project_dir = self._make_app(tmp_path)
 
-        with patch("scratch_monkey.gui.models._PROJECT_DIR", project_dir):
+        with patch("scratch_monkey.gui.models.PROJECT_DIR", project_dir):
             app.create_shared_volume("dup")
             result = app.create_shared_volume("dup")
 
@@ -456,7 +456,7 @@ class TestAppModelCreateSharedVolume:
 
         app, instances_dir, project_dir = self._make_app(tmp_path)
 
-        with patch("scratch_monkey.gui.models._PROJECT_DIR", project_dir):
+        with patch("scratch_monkey.gui.models.PROJECT_DIR", project_dir):
             result = app.create_shared_volume("bad name!")
 
         assert result != ""
@@ -479,7 +479,7 @@ class TestAppModelRenameInstance:
         project_dir = tmp_path / "project"
         project_dir.mkdir()
 
-        with patch("scratch_monkey.gui.models._PROJECT_DIR", project_dir):
+        with patch("scratch_monkey.gui.models.PROJECT_DIR", project_dir):
             app = AppModel(instances_dir=instances_dir, runner=runner)
 
         return app, instances_dir, project_dir
@@ -491,11 +491,11 @@ class TestAppModelRenameInstance:
         app, instances_dir, project_dir = self._make_app(tmp_path)
 
         # Create an instance first
-        with patch("scratch_monkey.gui.models._PROJECT_DIR", project_dir):
+        with patch("scratch_monkey.gui.models.PROJECT_DIR", project_dir):
             app.create_instance("old")
         app.selected_instance = "old"
 
-        with patch("scratch_monkey.gui.models._PROJECT_DIR", project_dir):
+        with patch("scratch_monkey.gui.models.PROJECT_DIR", project_dir):
             err = app.rename_instance("old", "new")
 
         assert err == ""
@@ -509,11 +509,11 @@ class TestAppModelRenameInstance:
 
         app, instances_dir, project_dir = self._make_app(tmp_path)
 
-        with patch("scratch_monkey.gui.models._PROJECT_DIR", project_dir):
+        with patch("scratch_monkey.gui.models.PROJECT_DIR", project_dir):
             app.create_instance("myinst")
         app.selected_instance = "myinst"
 
-        with patch("scratch_monkey.gui.models._PROJECT_DIR", project_dir):
+        with patch("scratch_monkey.gui.models.PROJECT_DIR", project_dir):
             err = app.rename_instance("myinst", "renamed")
 
         assert err == ""
@@ -525,12 +525,12 @@ class TestAppModelRenameInstance:
 
         app, instances_dir, project_dir = self._make_app(tmp_path)
 
-        with patch("scratch_monkey.gui.models._PROJECT_DIR", project_dir):
+        with patch("scratch_monkey.gui.models.PROJECT_DIR", project_dir):
             app.create_instance("myinst")
         app.selected_instance = "myinst"
 
         # Renaming nonexistent instance should raise an error
-        with patch("scratch_monkey.gui.models._PROJECT_DIR", project_dir):
+        with patch("scratch_monkey.gui.models.PROJECT_DIR", project_dir):
             err = app.rename_instance("nonexistent", "whatever")
 
         assert err != ""
@@ -554,7 +554,7 @@ class TestAppModelCloneInstance:
         project_dir = tmp_path / "project"
         project_dir.mkdir()
 
-        with patch("scratch_monkey.gui.models._PROJECT_DIR", project_dir):
+        with patch("scratch_monkey.gui.models.PROJECT_DIR", project_dir):
             app = AppModel(instances_dir=instances_dir, runner=runner)
 
         return app, instances_dir, project_dir
@@ -565,7 +565,7 @@ class TestAppModelCloneInstance:
 
         app, instances_dir, project_dir = self._make_app(tmp_path)
 
-        with patch("scratch_monkey.gui.models._PROJECT_DIR", project_dir):
+        with patch("scratch_monkey.gui.models.PROJECT_DIR", project_dir):
             app.create_instance("source")
             err = app.clone_instance("source", "dest")
 
@@ -579,7 +579,7 @@ class TestAppModelCloneInstance:
 
         app, instances_dir, project_dir = self._make_app(tmp_path)
 
-        with patch("scratch_monkey.gui.models._PROJECT_DIR", project_dir):
+        with patch("scratch_monkey.gui.models.PROJECT_DIR", project_dir):
             app.create_instance("orig")
             err = app.clone_instance("orig", "clone")
 
@@ -593,12 +593,12 @@ class TestAppModelCloneInstance:
 
         app, instances_dir, project_dir = self._make_app(tmp_path)
 
-        with patch("scratch_monkey.gui.models._PROJECT_DIR", project_dir):
+        with patch("scratch_monkey.gui.models.PROJECT_DIR", project_dir):
             app.create_instance("source")
             app.create_instance("existing")
         app.selected_instance = "source"
 
-        with patch("scratch_monkey.gui.models._PROJECT_DIR", project_dir):
+        with patch("scratch_monkey.gui.models.PROJECT_DIR", project_dir):
             err = app.clone_instance("source", "existing")
 
         assert err != ""
@@ -610,13 +610,13 @@ class TestAppModelCloneInstance:
 
         app, instances_dir, project_dir = self._make_app(tmp_path)
 
-        with patch("scratch_monkey.gui.models._PROJECT_DIR", project_dir):
+        with patch("scratch_monkey.gui.models.PROJECT_DIR", project_dir):
             app.create_instance("source")
 
         # Mark source image as existing so tag() gets called
         app._runner.image_exists.return_value = True
 
-        with patch("scratch_monkey.gui.models._PROJECT_DIR", project_dir):
+        with patch("scratch_monkey.gui.models.PROJECT_DIR", project_dir):
             err = app.clone_instance("source", "dest")
 
         assert err == ""
@@ -755,14 +755,14 @@ class TestInstanceModelDirty:
         project_dir = tmp_path / "project"
         project_dir.mkdir()
 
-        with patch("scratch_monkey.gui.models._PROJECT_DIR", project_dir):
+        with patch("scratch_monkey.gui.models.PROJECT_DIR", project_dir):
             app = AppModel(instances_dir=instances_dir, runner=runner)
 
         # No instances, no unsaved changes
         assert app.has_unsaved_changes() is False
 
         # Create an instance
-        with patch("scratch_monkey.gui.models._PROJECT_DIR", project_dir):
+        with patch("scratch_monkey.gui.models.PROJECT_DIR", project_dir):
             app.create_instance("myinst")
 
         # Initially not dirty
@@ -792,7 +792,7 @@ class TestAppModelExportCommand:
         project_dir = tmp_path / "project"
         project_dir.mkdir()
 
-        with patch("scratch_monkey.gui.models._PROJECT_DIR", project_dir):
+        with patch("scratch_monkey.gui.models.PROJECT_DIR", project_dir):
             app = AppModel(instances_dir=instances_dir, runner=runner)
 
         return app, instances_dir, project_dir
@@ -804,7 +804,7 @@ class TestAppModelExportCommand:
 
         app, instances_dir, project_dir = self._make_app(tmp_path)
 
-        with patch("scratch_monkey.gui.models._PROJECT_DIR", project_dir):
+        with patch("scratch_monkey.gui.models.PROJECT_DIR", project_dir):
             app.create_instance("myinst")
 
         mock_path = P("/home/user/.local/bin/rg")
@@ -835,7 +835,7 @@ class TestAppModelExportCommand:
 
         app, instances_dir, project_dir = self._make_app(tmp_path)
 
-        with patch("scratch_monkey.gui.models._PROJECT_DIR", project_dir):
+        with patch("scratch_monkey.gui.models.PROJECT_DIR", project_dir):
             app.create_instance("myinst")
 
         mock_path = P("/home/user/.local/bin/ripgrep")
@@ -850,12 +850,14 @@ class TestAppModelExportCommand:
         """export_command returns error string when export_command_fn raises."""
         from unittest.mock import patch
 
+        from scratch_monkey.export import ExportError
+
         app, instances_dir, project_dir = self._make_app(tmp_path)
 
-        with patch("scratch_monkey.gui.models._PROJECT_DIR", project_dir):
+        with patch("scratch_monkey.gui.models.PROJECT_DIR", project_dir):
             app.create_instance("myinst")
 
-        with patch("scratch_monkey.gui.models.export_command_fn", side_effect=RuntimeError("disk full")):
+        with patch("scratch_monkey.gui.models.export_command_fn", side_effect=ExportError("disk full")):
             err = app.export_command("myinst", "/usr/bin/rg")
 
         assert err == "disk full"
@@ -878,7 +880,7 @@ class TestAppModelEditFile:
         project_dir = tmp_path / "project"
         project_dir.mkdir()
 
-        with patch("scratch_monkey.gui.models._PROJECT_DIR", project_dir):
+        with patch("scratch_monkey.gui.models.PROJECT_DIR", project_dir):
             app = AppModel(instances_dir=instances_dir, runner=runner)
 
         return app, instances_dir, project_dir
@@ -889,7 +891,7 @@ class TestAppModelEditFile:
 
         app, instances_dir, project_dir = self._make_app(tmp_path)
 
-        with patch("scratch_monkey.gui.models._PROJECT_DIR", project_dir):
+        with patch("scratch_monkey.gui.models.PROJECT_DIR", project_dir):
             app.create_instance("myinst")
 
         with patch("scratch_monkey.gui.models._open_in_editor", return_value="") as mock_edit:
@@ -906,7 +908,7 @@ class TestAppModelEditFile:
 
         app, instances_dir, project_dir = self._make_app(tmp_path)
 
-        with patch("scratch_monkey.gui.models._PROJECT_DIR", project_dir):
+        with patch("scratch_monkey.gui.models.PROJECT_DIR", project_dir):
             app.create_instance("myinst")
 
         with patch("scratch_monkey.gui.models._open_in_editor", return_value="") as mock_edit:
@@ -930,7 +932,7 @@ class TestAppModelEditFile:
 
         app, instances_dir, project_dir = self._make_app(tmp_path)
 
-        with patch("scratch_monkey.gui.models._PROJECT_DIR", project_dir):
+        with patch("scratch_monkey.gui.models.PROJECT_DIR", project_dir):
             app.create_instance("myinst")
 
         with patch("scratch_monkey.gui.models._open_in_editor", return_value="No terminal emulator found."):

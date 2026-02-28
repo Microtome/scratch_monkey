@@ -24,10 +24,42 @@ Additional features include persistent overlay containers, shared volumes
 for inter-instance communication, GPU/device passthrough, command export
 to make container tools available on the host PATH, and an optional Qt GUI.
 
+### Coding agent sandbox
+
+A primary use case for scratch-monkey is providing isolated dev environments
+for AI coding agents (Claude Code, Aider, Copilot Workspace, etc.). Running
+an agent inside a scratch-monkey instance means it can install packages, modify
+system files, and experiment freely without any risk to your host OS.
+
+This is especially useful with flags like `--dangerously-skip-permissions` that
+give an agent full autonomy — inside a scratch-monkey container, "dangerous"
+operations like `rm -rf /`, `dnf remove --all`, or writing to `/etc` are
+fully contained. The worst case is a `scratch-monkey reset` or
+`scratch-monkey delete` to start fresh.
+
+```mermaid
+graph LR
+    AGENT["Coding Agent<br/>(--dangerously-skip-permissions)"] --> CONTAINER["scratch-monkey instance"]
+    CONTAINER -->|"isolated"| HOST["Host OS<br/>(untouched)"]
+    CONTAINER -->|"mount rw"| HOME["instance home/<br/>(disposable)"]
+```
+
+> **Not a security sandbox.** scratch-monkey is designed for *developer
+> convenience*, not for adversarial containment. It uses rootless Podman with
+> `--network=host`, `--security-opt label=disable`, and bind-mounted host
+> paths. These are reasonable defaults for dev work but are **not appropriate
+> for malware analysis, reverse engineering untrusted binaries, or any
+> security research where containment is critical**. The project has not been
+> designed or audited for that purpose, and some design choices (host
+> networking, SELinux disabled, host filesystem mounts) actively work against
+> it. For that kind of work, use purpose-built isolation tools (VMs, gVisor,
+> dedicated sandboxing frameworks).
+
 ---
 
 ## Table of Contents
 
+- [Coding Agent Sandbox](#coding-agent-sandbox)
 - [Installation](#installation)
 - [Core Concepts](#core-concepts)
 - [Base Image Architecture](#base-image-architecture)

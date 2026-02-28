@@ -95,14 +95,22 @@ class PodmanRunner:
         """Run `podman exec <container> <exec_args>` and return the result."""
         return self._run(["exec", container, *exec_args], capture=False)
 
-    def exec_capture(self, container: str, exec_args: list[str], *, user: str | None = None) -> str:
+    def exec_interactive(self, container: str, exec_args: list[str]) -> None:
+        """Run an interactive `podman exec` (no capture, for TTY use)."""
+        self._run(["exec", container, *exec_args], capture=False)
+
+    def exec_capture(
+        self, container: str, exec_args: list[str], *, user: str | None = None, input: str | None = None,
+    ) -> str:
         """Run `podman exec` and return captured stdout."""
         cmd = ["exec"]
         if user:
             cmd += ["--user", user]
+        if input is not None:
+            cmd.append("-i")
         cmd.append(container)
         cmd.extend(exec_args)
-        result = self._run(cmd)
+        result = self._run(cmd, input=input)
         return result.stdout
 
     def start(self, name: str) -> None:

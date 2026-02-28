@@ -77,7 +77,7 @@ def load(path: Path) -> InstanceConfig:
             return [str(v) for v in val]
         return []
 
-    return InstanceConfig(
+    config = InstanceConfig(
         cmd=str(data.get("cmd", "/bin/bash")),
         wayland=_bool(data.get("wayland", False)),
         ssh=_bool(data.get("ssh", False)),
@@ -90,6 +90,19 @@ def load(path: Path) -> InstanceConfig:
         devices=_strlist(data.get("devices", [])),
         overlay_id=str(data.get("overlay_id", "")),
     )
+
+    # Validate home path if set
+    if config.home:
+        if not os.path.isabs(config.home):
+            raise ConfigError(
+                f"home path must be absolute, got: {config.home!r}"
+            )
+        if ".." in Path(config.home).parts:
+            raise ConfigError(
+                f"home path must not contain '..': {config.home!r}"
+            )
+
+    return config
 
 
 def save(path: Path, config: InstanceConfig) -> None:

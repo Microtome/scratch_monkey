@@ -139,6 +139,7 @@ def delete(name: str, instances_dir: Path, runner: PodmanRunner) -> None:
 
     Raises InstanceError if the instance does not exist.
     """
+    validate_name(name)
     instances_dir = Path(instances_dir)
     instance_dir = instances_dir / name
 

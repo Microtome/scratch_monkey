@@ -1,14 +1,13 @@
 """Tests for scratch_monkey.instance module."""
 
 from pathlib import Path
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
 import pytest
 from click.testing import CliRunner
 
 from scratch_monkey.cli.main import cli
 from scratch_monkey.config import ConfigError, InstanceConfig, save
-from scratch_monkey.container import PodmanRunner
 from scratch_monkey.instance import (
     InstanceError,
     clone,
@@ -19,31 +18,6 @@ from scratch_monkey.instance import (
     list_all,
     rename,
 )
-
-
-@pytest.fixture
-def mock_runner():
-    runner = MagicMock(spec=PodmanRunner)
-    runner.image_exists.return_value = False
-    runner.container_running.return_value = False
-    return runner
-
-
-@pytest.fixture
-def instances_dir(tmp_path):
-    d = tmp_path / "scratch-monkey"
-    d.mkdir()
-    return d
-
-
-@pytest.fixture
-def project_dir(tmp_path):
-    """Fake project dir with scratch.toml.default."""
-    p = tmp_path / "project"
-    p.mkdir()
-    (p / "scratch.toml.default").write_text("# scratch-monkey instance configuration\n")
-    return p
-
 
 # ─── create ───────────────────────────────────────────────────────────────────
 
@@ -242,46 +216,59 @@ class TestListAll:
 
 
 class TestSkelCopy:
-    def test_copies_skel_files(self, tmp_path, instances_dir, project_dir):
+    @staticmethod
+    def _patch_skel(fake_skel):
+        _Orig = Path
+        def _side_effect(*a, **kw):
+            p = _Orig(*a, **kw)
+            if str(p) == "/etc/skel":
+                return fake_skel
+            return p
+        return patch("scratch_monkey.instance.Path", side_effect=_side_effect)
+
+    def test_copies_skel_files(self, instances_dir, project_dir, tmp_path):
         inst = create("myproject", instances_dir, "scratch_dev", project_dir)
-        fake_skel = tmp_path / "skel"
+        fake_skel = tmp_path / "fake_skel"
         fake_skel.mkdir()
         (fake_skel / ".bashrc").write_text("# bashrc")
         (fake_skel / ".profile").write_text("# profile")
-        with patch("scratch_monkey.instance.Path") as mock_path:
-            # Use actual Path but override /etc/skel
-            mock_path.side_effect = lambda *a: Path(*a)
-            with patch("scratch_monkey.instance.Path") as _:
-                pass
-        # Test directly with patched skel dir
-        with patch("scratch_monkey.instance.skel_copy") as mock_skel:
-            mock_skel.return_value = [".bashrc", ".profile"]
-            copied = mock_skel(inst)
-            assert ".bashrc" in copied
+        with self._patch_skel(fake_skel):
+            from scratch_monkey.instance import skel_copy
+            copied = skel_copy(inst)
+        assert sorted(copied) == [".bashrc", ".profile"]
+        assert (inst.home_dir / ".bashrc").read_text() == "# bashrc"
 
     def test_skips_existing_files(self, instances_dir, project_dir, tmp_path):
         inst = create("myproject", instances_dir, "scratch_dev", project_dir)
         (inst.home_dir / ".bashrc").write_text("existing")
-        # Patch the skel dir to a fake location
         fake_skel = tmp_path / "fake_skel"
         fake_skel.mkdir()
         (fake_skel / ".bashrc").write_text("# skel")
-        with patch("scratch_monkey.instance.Path", wraps=Path):
-            # Override /etc/skel resolution
-            original_Path = Path
+        (fake_skel / ".profile").write_text("# profile")
+        with self._patch_skel(fake_skel):
+            from scratch_monkey.instance import skel_copy
+            copied = skel_copy(inst)
+        assert copied == [".profile"]
+        assert (inst.home_dir / ".bashrc").read_text() == "existing"
 
-            def patched_Path(*args):
-                if args == ("/etc/skel",):
-                    return fake_skel
-                return original_Path(*args)
+    def test_copies_directories(self, instances_dir, project_dir, tmp_path):
+        inst = create("myproject", instances_dir, "scratch_dev", project_dir)
+        fake_skel = tmp_path / "fake_skel"
+        fake_skel.mkdir()
+        (fake_skel / ".config").mkdir()
+        (fake_skel / ".config" / "app.conf").write_text("key=val")
+        with self._patch_skel(fake_skel):
+            from scratch_monkey.instance import skel_copy
+            copied = skel_copy(inst)
+        assert ".config" in copied
+        assert (inst.home_dir / ".config" / "app.conf").read_text() == "key=val"
 
-            with patch("scratch_monkey.instance.Path", side_effect=patched_Path):
-                # Can't easily patch here without refactor; just call real function
-                pass
-        # Direct test: the real function won't copy if file exists
-        # We test via the actual logic by checking no override
-        (inst.home_dir / ".bashrc").write_text("existing")
-        # Verify the mock above would work
+    def test_returns_empty_when_skel_missing(self, instances_dir, project_dir, tmp_path):
+        inst = create("myproject", instances_dir, "scratch_dev", project_dir)
+        with self._patch_skel(tmp_path / "nonexistent"):
+            from scratch_monkey.instance import skel_copy
+            copied = skel_copy(inst)
+        assert copied == []
 
 
 # ─── detect_base_image / is_fedora_based ─────────────────────────────────────

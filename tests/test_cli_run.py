@@ -42,7 +42,7 @@ class TestRunInstanceGpu:
         runner.image_exists.return_value = True
 
         detected = ["/dev/dri", "/dev/kfd"]
-        with patch("scratch_monkey.cli.main._gpu_devices", return_value=detected):
+        with patch("scratch_monkey.run_args.gpu_devices", return_value=detected):
             cli_runner = CliRunner()
             with patch("scratch_monkey.cli.main.PodmanRunner", return_value=runner):
                 cli_runner.invoke(
@@ -62,7 +62,7 @@ class TestRunInstanceGpu:
         runner = MagicMock(spec=PodmanRunner)
         runner.image_exists.return_value = True
 
-        with patch("scratch_monkey.cli.main._gpu_devices", return_value=["/dev/dri"]):
+        with patch("scratch_monkey.run_args.gpu_devices", return_value=["/dev/dri"]):
             cli_runner = CliRunner()
             with patch("scratch_monkey.cli.main.PodmanRunner", return_value=runner):
                 cli_runner.invoke(
@@ -105,7 +105,7 @@ class TestRunInstanceGpu:
         runner = MagicMock(spec=PodmanRunner)
         runner.image_exists.return_value = True
 
-        with patch("scratch_monkey.cli.main._gpu_devices", return_value=["/dev/dri"]):
+        with patch("scratch_monkey.run_args.gpu_devices", return_value=["/dev/dri"]):
             cli_runner = CliRunner()
             with patch("scratch_monkey.cli.main.PodmanRunner", return_value=runner):
                 cli_runner.invoke(

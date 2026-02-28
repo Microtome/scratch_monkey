@@ -100,6 +100,15 @@ Group features by complexity:
 
 ### Phase 3 — Spawn Agents
 
+**Before spawning any agent**, the PM must verify it is on the correct branch:
+
+```bash
+git branch --show-current   # must match the topic branch (e.g. feat/<topic>)
+git log --oneline -1        # confirm HEAD is where you expect
+```
+
+Worktrees branch off the PM's current HEAD. If HEAD is on the wrong branch, agents will work on the wrong base and their changes will be unmergeable. **This check is mandatory before every spawn.**
+
 For each feature group, spawn a coding agent using the Task tool with `isolation: "worktree"`:
 
 ```

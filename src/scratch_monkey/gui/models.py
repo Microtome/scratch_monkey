@@ -17,15 +17,14 @@ except ImportError:
     )
 
 from ..config import ConfigError, InstanceConfig, save
-from ..container import PodmanRunner
+from ..container import PodmanError, PodmanRunner
+from ..export import ExportError
 from ..export import export_command as export_command_fn
 from ..instance import Instance, InstanceError, InstanceInfo, clone, create, delete, list_all, rename, skel_copy
+from ..overlay import OverlayError
 from ..overlay import reset as overlay_reset
+from ..run_args import DEFAULT_BASE_IMAGE, FEDORA_IMAGE, PROJECT_DIR
 from ..shared import list_shared, parse_shared_entry
-
-_PROJECT_DIR = Path(__file__).parent.parent.parent.parent
-_DEFAULT_BASE_IMAGE = "scratch_dev"
-_FEDORA_IMAGE = "scratch_dev_fedora"
 
 
 def _find_terminal() -> list[str]:
@@ -290,7 +289,7 @@ class AppModel(Atom):
             self.available_shared = [v.name for v in list_shared(instances_dir)]
             self.instances = [InstanceModel.from_info(i) for i in infos]
             self.status_message = f"Loaded {len(self.instances)} instance(s)"
-        except Exception as e:
+        except (InstanceError, PodmanError, ConfigError) as e:
             self.status_message = f"Error loading instances: {e}"
 
     # ── actions ──────────────────────────────────────────────────────────────
@@ -328,7 +327,7 @@ class AppModel(Atom):
                 self.status_message = f"Overlay container for {name!r} removed."
             else:
                 self.status_message = f"No overlay container found for {name!r}"
-        except Exception as e:
+        except (InstanceError, PodmanError, OverlayError) as e:
             self.status_message = f"Error: {e}"
         self.refresh()
 
@@ -338,7 +337,7 @@ class AppModel(Atom):
             delete(name, Path(self.instances_dir), self._runner)
             self.status_message = f"Deleted {name!r}"
             self.selected_instance = ""
-        except Exception as e:
+        except (InstanceError, PodmanError) as e:
             self.status_message = f"Error: {e}"
         self.refresh()
 
@@ -349,7 +348,7 @@ class AppModel(Atom):
             self.status_message = f"Renamed {old_name!r} to {new_name!r}"
             if self.selected_instance == old_name:
                 self.selected_instance = new_name
-        except Exception as e:
+        except (InstanceError, PodmanError, ConfigError) as e:
             return str(e)
         self.refresh()
         return ""
@@ -360,7 +359,7 @@ class AppModel(Atom):
             clone(source, dest, Path(self.instances_dir), self._runner)
             self.status_message = f"Cloned {source!r} to {dest!r}"
             self.selected_instance = dest
-        except Exception as e:
+        except (InstanceError, PodmanError, ConfigError) as e:
             return str(e)
         self.refresh()
         return ""
@@ -375,7 +374,7 @@ class AppModel(Atom):
         try:
             path = export_command_fn(inst, cmd, bin_name=bin_name)
             self.status_message = f"Exported {cmd!r} from {name!r} to {path}"
-        except Exception as e:
+        except (ExportError, OSError, RuntimeError) as e:
             return str(e)
         return ""
 
@@ -421,9 +420,14 @@ class AppModel(Atom):
 
         def _wait_and_refresh():
             proc.wait()
-            self.refresh()
-            if self.selected_instance == name:
-                self.status_message = f"Reloaded config for {name!r}"
+            from enaml.application import deferred_call
+
+            def _update():
+                self.refresh()
+                if self.selected_instance == name:
+                    self.status_message = f"Reloaded config for {name!r}"
+
+            deferred_call(_update)
 
         threading.Thread(target=_wait_and_refresh, daemon=True).start()
 
@@ -451,9 +455,9 @@ class AppModel(Atom):
         self, name: str, *, fedora: bool = False, skel: bool = False, config: InstanceConfig | None = None
     ) -> str:
         """Create a new instance. Returns '' on success or error string on failure."""
-        base_image = _FEDORA_IMAGE if fedora else _DEFAULT_BASE_IMAGE
+        base_image = FEDORA_IMAGE if fedora else DEFAULT_BASE_IMAGE
         try:
-            inst = create(name, Path(self.instances_dir), base_image, _PROJECT_DIR)
+            inst = create(name, Path(self.instances_dir), base_image, PROJECT_DIR)
         except (InstanceError, ConfigError) as e:
             return str(e)
         if skel:

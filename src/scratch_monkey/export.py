@@ -3,11 +3,14 @@
 from __future__ import annotations
 
 import os
+import shlex
 import stat
+import sys
 from pathlib import Path
 from string import Template
 
 from .instance import Instance
+from .run_args import short_hostname
 
 
 class ExportError(Exception):
@@ -15,6 +18,14 @@ class ExportError(Exception):
 
 
 _EXPORT_MAGIC = "# scratch-monkey export"
+
+_SHADOW_WARN_COMMANDS = frozenset({
+    "bash", "cat", "cd", "chmod", "chown", "cp", "curl", "diff", "echo",
+    "env", "find", "git", "grep", "kill", "less", "ln", "ls", "man",
+    "mkdir", "more", "mv", "pip", "podman", "ps", "python", "python3",
+    "rm", "rmdir", "sed", "sh", "ssh", "sudo", "tail", "tar", "tee",
+    "touch", "uv", "vi", "vim", "wget", "which", "zsh",
+})
 
 _SCRIPT_TEMPLATE = Template(
     """\
@@ -65,6 +76,17 @@ def export_command(
     """
     if not bin_name:
         bin_name = Path(cmd).name
+    if not bin_name:
+        raise ExportError(f"Cannot derive binary name from command: {cmd!r}")
+    if "/" in bin_name or bin_name in (".", ".."):
+        raise ExportError(f"Invalid binary name: {bin_name!r}")
+
+    if bin_name in _SHADOW_WARN_COMMANDS:
+        print(
+            f"Warning: '{bin_name}' shadows a common system command. "
+            f"This export will take precedence over the real '{bin_name}' in your PATH.",
+            file=sys.stderr,
+        )
 
     if bin_dir is None:
         bin_dir = Path.home() / ".local" / "bin"
@@ -74,12 +96,12 @@ def export_command(
     out_path = bin_dir / bin_name
     username = os.environ.get("USER", "user")
     container_home = f"/home/{username}"
-    hostname = f"{instance.name}.{_short_hostname()}"
+    hostname = f"{instance.name}.{short_hostname()}"
 
     content = _SCRIPT_TEMPLATE.substitute(
         instance_name=instance.name,
         overlay_name=instance.config.overlay_id or f"{instance.name}-overlay",
-        cmd=cmd,
+        cmd=shlex.quote(cmd),
         base_image=base_image,
         hostname=hostname,
         container_home=container_home,
@@ -88,7 +110,7 @@ def export_command(
     )
 
     out_path.write_text(content)
-    out_path.chmod(out_path.stat().st_mode | stat.S_IEXEC | stat.S_IXGRP | stat.S_IXOTH)
+    out_path.chmod(out_path.stat().st_mode | stat.S_IEXEC | stat.S_IXGRP)
     return out_path
 
 
@@ -98,6 +120,9 @@ def unexport(bin_name: str, bin_dir: Path | None = None) -> None:
     Validates the magic comment before removing to avoid deleting arbitrary files.
     Raises ExportError if the file is missing or not a scratch-monkey export.
     """
+    if "/" in bin_name or bin_name in (".", ".."):
+        raise ExportError(f"Invalid binary name: {bin_name!r}")
+
     if bin_dir is None:
         bin_dir = Path.home() / ".local" / "bin"
     bin_dir = Path(bin_dir)
@@ -115,6 +140,3 @@ def unexport(bin_name: str, bin_dir: Path | None = None) -> None:
     out_path.unlink()
 
 
-def _short_hostname() -> str:
-    import socket
-    return socket.gethostname().split(".")[0]

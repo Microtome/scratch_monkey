@@ -7,7 +7,8 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from scratch_monkey.config import InstanceConfig, save
+from scratch_monkey.config import InstanceConfig
+from scratch_monkey.config import save as cfg_save
 from scratch_monkey.container import PodmanRunner
 from scratch_monkey.instance import Instance
 
@@ -45,37 +46,37 @@ def project_dir(tmp_path: Path) -> Path:
 
 @pytest.fixture
 def scratch_instance(tmp_path: Path) -> Instance:
-    """A scratch-based instance fixture."""
-    inst_dir = tmp_path / "instances" / "scratchinst"
-    inst_dir.mkdir(parents=True)
-    home_dir = inst_dir / "home"
-    home_dir.mkdir()
+    """A scratch-based instance with preset overlay_id for overlay/run_args tests."""
+    inst_dir = tmp_path / "myinstance"
+    inst_dir.mkdir()
+    (inst_dir / "home").mkdir()
     (inst_dir / "Dockerfile").write_text("FROM scratch_dev\n")
-    cfg = InstanceConfig()
-    save(inst_dir / "scratch.toml", cfg)
+    cfg = InstanceConfig(overlay_id="sm-testtest")
     (inst_dir / ".env").touch()
+    cfg_save(inst_dir / "scratch.toml", cfg)
     return Instance(
-        name="scratchinst",
+        name="myinstance",
         directory=inst_dir,
         config=cfg,
-        home_dir=home_dir,
+        home_dir=inst_dir / "home",
     )
 
 
 @pytest.fixture
 def fedora_instance(tmp_path: Path) -> Instance:
-    """A fedora-based instance fixture."""
-    inst_dir = tmp_path / "instances" / "fedorainst"
-    inst_dir.mkdir(parents=True)
-    home_dir = inst_dir / "home"
-    home_dir.mkdir()
+    """A fedora-based instance with preset overlay_id for overlay/run_args tests."""
+    inst_dir = tmp_path / "fedorainst"
+    inst_dir.mkdir()
+    (inst_dir / "home").mkdir()
     (inst_dir / "Dockerfile").write_text("FROM scratch_dev_fedora\n")
-    cfg = InstanceConfig()
-    save(inst_dir / "scratch.toml", cfg)
+    cfg = InstanceConfig(overlay_id="sm-fedotest")
     (inst_dir / ".env").touch()
+    cfg_save(inst_dir / "scratch.toml", cfg)
     return Instance(
         name="fedorainst",
         directory=inst_dir,
         config=cfg,
-        home_dir=home_dir,
+        home_dir=inst_dir / "home",
     )
+
+

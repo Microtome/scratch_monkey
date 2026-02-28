@@ -23,23 +23,22 @@ from ..instance import (
     rename,
     skel_copy,
 )
-from ..overlay import _gpu_devices, ensure_running, exec_shell
+from ..overlay import ensure_running, exec_shell
 from ..overlay import reset as overlay_reset
+from ..run_args import (
+    DEFAULT_BASE_IMAGE,
+    FEDORA_IMAGE,
+    PROJECT_DIR,
+    build_run_args,
+)
 from ..shared import (
     SharedError,
     add_to_instance,
     create_shared,
     delete_shared,
     list_shared,
-    parse_shared_entry,
     remove_from_instance,
 )
-
-DEFAULT_BASE_IMAGE = "scratch_dev"
-FEDORA_IMAGE = "scratch_dev_fedora"
-
-# Path to this package's project directory (where Dockerfiles live)
-_PROJECT_DIR = Path(__file__).parent.parent.parent.parent
 
 
 @click.group()
@@ -87,7 +86,7 @@ def create_cmd(ctx: click.Context, name: str, fedora: bool, skel: bool) -> None:
     instances_dir: Path = ctx.obj["instances_dir"]
     base_image = FEDORA_IMAGE if fedora else ctx.obj["base_image"]
     try:
-        inst = create(name, instances_dir, base_image, _PROJECT_DIR)
+        inst = create(name, instances_dir, base_image, PROJECT_DIR)
     except (InstanceError, ConfigError) as e:
         click.echo(f"Error: {e}", err=True)
         sys.exit(1)
@@ -256,10 +255,10 @@ def build(ctx: click.Context, fedora: bool, yes: bool) -> None:
             click.confirm(f"Image {base_image!r} already exists. Rebuild?", abort=True)
 
     if fedora:
-        dockerfile = str(_PROJECT_DIR / "Dockerfile.fedora")
-        runner.build(base_image, str(_PROJECT_DIR), dockerfile=dockerfile)
+        dockerfile = str(PROJECT_DIR / "Dockerfile.fedora")
+        runner.build(base_image, str(PROJECT_DIR), dockerfile=dockerfile)
     else:
-        runner.build(base_image, str(_PROJECT_DIR))
+        runner.build(base_image, str(PROJECT_DIR))
     click.echo(f"Built image {base_image!r}")
 
 
@@ -279,9 +278,9 @@ def build_instance(ctx: click.Context, name: str) -> None:
     if not runner.image_exists(instance_base):
         click.echo(f"Base image {instance_base!r} not found, building...")
         if "fedora" in instance_base:
-            runner.build(instance_base, str(_PROJECT_DIR), dockerfile=str(_PROJECT_DIR / "Dockerfile.fedora"))
+            runner.build(instance_base, str(PROJECT_DIR), dockerfile=str(PROJECT_DIR / "Dockerfile.fedora"))
         else:
-            runner.build(instance_base, str(_PROJECT_DIR))
+            runner.build(instance_base, str(PROJECT_DIR))
 
     runner.build(name, str(inst.directory), dockerfile=str(inst.directory / "Dockerfile"))
     click.echo(f"Built instance image {name!r}")
@@ -380,9 +379,9 @@ def _run_instance(
         if not runner.image_exists(run_image):
             click.echo(f"Base image {run_image!r} not found, building...")
             if "fedora" in run_image:
-                runner.build(run_image, str(_PROJECT_DIR), dockerfile=str(_PROJECT_DIR / "Dockerfile.fedora"))
+                runner.build(run_image, str(PROJECT_DIR), dockerfile=str(PROJECT_DIR / "Dockerfile.fedora"))
             else:
-                runner.build(run_image, str(_PROJECT_DIR))
+                runner.build(run_image, str(PROJECT_DIR))
 
     fedora = is_fedora_based(inst.directory)
 
@@ -397,108 +396,18 @@ def _run_instance(
         exec_shell(inst, runner, container_name, root=root, cmd=cfg.cmd)
         return
 
-    # Container home path
-    if root and not cfg.overlay:
-        container_home = "/root"
-    else:
-        container_home = f"/home/{user}"
-
-    podman_args = [
-        "--rm", "-it",
-        "--security-opt", "label=disable",
-        "--network=host",
-        "--hostname", f"{inst.name}.{_short_hostname()}",
-        "-e", f"HOME={container_home}",
-        "-e", f"USER={user}",
-        "-e", f"SCRATCH_INSTANCE={inst.name}",
-        "-v", f"{inst.home_dir}:{container_home}",
-        "--workdir", container_home,
-    ]
-
-    if not root:
-        podman_args.append("--userns=keep-id")
-
-    # Host mounts for scratch
-    if not fedora:
-        podman_args += [
-            "-v", "/usr:/usr:ro",
-            "-v", "/etc:/etc:ro",
-            "-v", "/var/usrlocal:/var/usrlocal:ro",
-            "-v", "/var/opt:/var/opt:ro",
-            "-v", "/var/usrlocal:/usr/local:ro",
-        ]
-
-    # Wayland
-    if cfg.wayland:
-        uid = os.getuid()
-        wayland_sock = f"/run/user/{uid}/wayland-0"
-        if os.path.exists(wayland_sock):
-            podman_args += [
-                "-v", f"{wayland_sock}:{wayland_sock}",
-                "-e", "WAYLAND_DISPLAY=wayland-0",
-                "-e", f"XDG_RUNTIME_DIR=/run/user/{uid}",
-            ]
-        else:
-            click.echo(f"Warning: Wayland socket not found at {wayland_sock}, skipping.", err=True)
-
-    # SSH
-    if cfg.ssh:
-        ssh_sock = os.environ.get("SSH_AUTH_SOCK", "")
-        if ssh_sock and os.path.exists(ssh_sock):
-            podman_args += [
-                "-v", f"{ssh_sock}:{ssh_sock}",
-                "-e", f"SSH_AUTH_SOCK={ssh_sock}",
-            ]
-        else:
-            click.echo("Warning: SSH_AUTH_SOCK not set or socket missing, skipping.", err=True)
-
-    # .env file
-    env_file = inst.directory / ".env"
-    if env_file.exists():
-        podman_args += ["--env-file", str(env_file)]
-
-    # Extra volumes
-    for vol in cfg.volumes:
-        podman_args += ["-v", vol]
-
-    # Shared volumes
-    instances_dir = inst.directory.parent
-    for shared_entry in cfg.shared:
-        shared_name, mode = parse_shared_entry(shared_entry)
-        shared_path = instances_dir / ".shared" / shared_name
-        if shared_path.is_dir():
-            mount_spec = f"{shared_path}:/shared/{shared_name}"
-            if mode == "ro":
-                mount_spec += ":ro"
-            podman_args += ["-v", mount_spec]
-        else:
-            click.echo(
-                f"Warning: shared volume {shared_name!r} not found, skipping.",
-                err=True,
-            )
-
-    # Extra env vars
-    for var in cfg.env:
-        podman_args += ["-e", var]
-
-    # GPU passthrough
-    if cfg.gpu:
-        for dev in _gpu_devices():
-            podman_args += ["--device", dev]
-
-    # Extra devices
-    for dev in cfg.devices:
-        podman_args += ["--device", dev]
-
+    # Build podman args via shared helper
+    container_home = "/root" if root else f"/home/{user}"
+    run_args, warnings = build_run_args(instance=inst, is_fedora=fedora, root=root)
+    for w in warnings:
+        click.echo(f"Warning: {w}", err=True)
+    podman_args = ["--rm", "-it"]
+    podman_args += run_args
+    podman_args += ["--workdir", container_home]
     podman_args.append(run_image)
     podman_args.append(cfg.cmd)
 
     runner.run(podman_args)
-
-
-def _short_hostname() -> str:
-    import socket
-    return socket.gethostname().split(".")[0]
 
 
 # ─── Export ───────────────────────────────────────────────────────────────────

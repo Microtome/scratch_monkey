@@ -1,82 +1,31 @@
 """Tests for scratch_monkey.overlay module."""
 
 import os
-from unittest.mock import MagicMock, patch
-
-import pytest
+from unittest.mock import patch
 
 from scratch_monkey.config import InstanceConfig
-from scratch_monkey.container import PodmanError, PodmanRunner
+from scratch_monkey.container import PodmanError
 from scratch_monkey.instance import Instance
 from scratch_monkey.overlay import (
-    _build_run_args,
-    _gpu_devices,
-    _overlay_name,
+    _ensure_overlay_id,
     _setup_fedora_user,
     ensure_running,
     exec_shell,
     reset,
 )
 
-
-@pytest.fixture
-def mock_runner():
-    runner = MagicMock(spec=PodmanRunner)
-    runner.container_exists.return_value = False
-    runner.container_running.return_value = False
-    runner.image_exists.return_value = False
-    return runner
+# ─── _ensure_overlay_id ───────────────────────────────────────────────────────
 
 
-@pytest.fixture
-def scratch_instance(tmp_path):
-    inst_dir = tmp_path / "myinstance"
-    inst_dir.mkdir()
-    (inst_dir / "home").mkdir()
-    (inst_dir / "Dockerfile").write_text("FROM scratch_dev\n")
-    cfg = InstanceConfig(overlay_id="sm-testtest")
-    (inst_dir / ".env").touch()
-    # Write scratch.toml with the preset overlay_id so _overlay_name returns it
-    from scratch_monkey.config import save as cfg_save
-    cfg_save(inst_dir / "scratch.toml", cfg)
-    return Instance(
-        name="myinstance",
-        directory=inst_dir,
-        config=cfg,
-        home_dir=inst_dir / "home",
-    )
-
-
-@pytest.fixture
-def fedora_instance(tmp_path):
-    inst_dir = tmp_path / "fedorainst"
-    inst_dir.mkdir()
-    (inst_dir / "home").mkdir()
-    (inst_dir / "Dockerfile").write_text("FROM scratch_dev_fedora\n")
-    cfg = InstanceConfig(overlay_id="sm-fedotest")
-    (inst_dir / ".env").touch()
-    from scratch_monkey.config import save as cfg_save
-    cfg_save(inst_dir / "scratch.toml", cfg)
-    return Instance(
-        name="fedorainst",
-        directory=inst_dir,
-        config=cfg,
-        home_dir=inst_dir / "home",
-    )
-
-
-# ─── _overlay_name ────────────────────────────────────────────────────────────
-
-
-def test_overlay_name_returns_existing_overlay_id(scratch_instance):
-    """When overlay_id is already set, _overlay_name returns it directly."""
+def test_ensure_overlay_id_returns_existing(scratch_instance):
+    """When overlay_id is already set, _ensure_overlay_id returns it directly."""
     scratch_instance.config.overlay_id = "sm-aabbccdd"
-    result = _overlay_name(scratch_instance)
+    result = _ensure_overlay_id(scratch_instance)
     assert result == "sm-aabbccdd"
 
 
-def test_overlay_name_generates_and_saves_when_empty(tmp_path):
-    """When overlay_id is empty, _overlay_name generates one and saves it."""
+def test_ensure_overlay_id_generates_and_saves_when_empty(tmp_path):
+    """When overlay_id is empty, _ensure_overlay_id generates one and saves it."""
     inst_dir = tmp_path / "geninstance"
     inst_dir.mkdir()
     (inst_dir / "home").mkdir()
@@ -91,7 +40,7 @@ def test_overlay_name_generates_and_saves_when_empty(tmp_path):
     )
     assert inst.config.overlay_id == ""
 
-    result = _overlay_name(inst)
+    result = _ensure_overlay_id(inst)
 
     # Should have generated a valid overlay_id
     import re
@@ -169,6 +118,42 @@ class TestEnsureRunning:
         run_args = call_args[0][2]
         assert "/usr:/usr:ro" not in run_args
 
+    def test_setup_fedora_user_sudoers_uses_tee(self, fedora_instance, mock_runner):
+        """Verify sudoers is written via tee+stdin, not shell interpolation."""
+        mock_runner.container_exists.return_value = False
+        mock_runner.container_running.return_value = False
+        mock_runner.exec_capture.return_value = ""
+        ensure_running(fedora_instance, mock_runner, "scratch_dev_fedora")
+
+        calls = mock_runner.exec_capture.call_args_list
+        tee_call = None
+        chmod_call = None
+        for c in calls:
+            exec_args = c[0][1] if len(c[0]) > 1 else []
+            if exec_args and exec_args[0] == "tee":
+                tee_call = c
+            if exec_args and exec_args[0] == "chmod":
+                chmod_call = c
+
+        assert tee_call is not None, "Expected a tee call for sudoers"
+        tee_args = tee_call[0][1]
+        assert "/etc/sudoers.d/" in tee_args[1]
+        assert "NOPASSWD" in tee_call[1].get("input", "")
+        assert tee_call[1].get("user") == "root"
+
+        assert chmod_call is not None, "Expected a chmod call"
+        assert chmod_call[0][1] == ["chmod", "440", tee_args[1]]
+        assert chmod_call[1].get("user") == "root"
+
+    def test_prints_warnings_to_stderr(self, scratch_instance, mock_runner, capsys):
+        """Warnings from build_run_args should be printed to stderr."""
+        mock_runner.container_exists.return_value = False
+        scratch_instance.config.wayland = True
+        with patch("os.path.exists", return_value=False):
+            ensure_running(scratch_instance, mock_runner, "scratch_dev")
+        captured = capsys.readouterr()
+        assert "Warning:" in captured.err
+
 
 # ─── _setup_fedora_user ───────────────────────────────────────────────────────
 
@@ -195,7 +180,8 @@ class TestSetupFedoraUser:
         mock_runner.exec_capture.side_effect = [
             "",  # sudo install
             PodmanError("useradd: user exists"),  # useradd
-            "",  # sudoers
+            "",  # sudoers (tee)
+            "",  # chmod
         ]
         with patch.dict(os.environ, {"USER": "testuser"}):
             _setup_fedora_user("mycontainer", mock_runner)  # should not raise
@@ -227,24 +213,31 @@ class TestExecShell:
     def test_exec_as_user(self, scratch_instance, mock_runner):
         with patch.dict(os.environ, {"USER": "testuser"}):
             exec_shell(scratch_instance, mock_runner, "myinstance-overlay")
-        mock_runner._run.assert_called_once()
-        args = mock_runner._run.call_args[0][0]
-        assert "exec" in args
-        assert "--user" in args
-        assert "testuser" in args
+        mock_runner.exec_interactive.assert_called_once()
+        call_args = mock_runner.exec_interactive.call_args
+        container = call_args[0][0]
+        exec_args = call_args[0][1]
+        assert container == "myinstance-overlay"
+        assert "--user" in exec_args
+        assert "testuser" in exec_args
+        # container_name should NOT be in exec_args (passed as separate param)
+        assert "myinstance-overlay" not in exec_args
 
     def test_exec_as_root(self, scratch_instance, mock_runner):
         exec_shell(scratch_instance, mock_runner, "myinstance-overlay", root=True)
-        args = mock_runner._run.call_args[0][0]
-        assert "--user" in args
-        user_idx = args.index("--user")
-        assert args[user_idx + 1] == "root"
-        assert "/root" in args
+        call_args = mock_runner.exec_interactive.call_args
+        container = call_args[0][0]
+        exec_args = call_args[0][1]
+        assert container == "myinstance-overlay"
+        assert "--user" in exec_args
+        user_idx = exec_args.index("--user")
+        assert exec_args[user_idx + 1] == "root"
+        assert "/root" in exec_args
 
     def test_passes_cmd(self, scratch_instance, mock_runner):
         exec_shell(scratch_instance, mock_runner, "myinstance-overlay", cmd="/bin/zsh")
-        args = mock_runner._run.call_args[0][0]
-        assert "/bin/zsh" in args
+        exec_args = mock_runner.exec_interactive.call_args[0][1]
+        assert "/bin/zsh" in exec_args
 
 
 # ─── reset ────────────────────────────────────────────────────────────────────
@@ -262,140 +255,3 @@ class TestReset:
         result = reset(scratch_instance, mock_runner)
         assert result is False
         mock_runner.remove.assert_not_called()
-
-
-# ─── _gpu_devices ─────────────────────────────────────────────────────────────
-
-
-class TestGpuDevices:
-    def test_detects_dri(self, tmp_path):
-        with patch("os.path.exists", side_effect=lambda p: p == "/dev/dri"):
-            devices = _gpu_devices()
-        assert "/dev/dri" in devices
-
-    def test_detects_kfd(self, tmp_path):
-        with patch("os.path.exists", side_effect=lambda p: p == "/dev/kfd"):
-            devices = _gpu_devices()
-        assert "/dev/kfd" in devices
-
-    def test_detects_nvidia_devices(self):
-        nvidia_devs = {"/dev/nvidia0", "/dev/nvidiactl", "/dev/nvidia-modeset",
-                       "/dev/nvidia-uvm", "/dev/nvidia-uvm-tools"}
-        with patch("os.path.exists", side_effect=lambda p: p in nvidia_devs):
-            devices = _gpu_devices()
-        for dev in nvidia_devs:
-            assert dev in devices
-
-    def test_empty_when_no_gpu(self):
-        with patch("os.path.exists", return_value=False):
-            devices = _gpu_devices()
-        assert devices == []
-
-    def test_detects_multiple(self):
-        present = {"/dev/dri", "/dev/kfd", "/dev/nvidia0"}
-        with patch("os.path.exists", side_effect=lambda p: p in present):
-            devices = _gpu_devices()
-        assert "/dev/dri" in devices
-        assert "/dev/kfd" in devices
-        assert "/dev/nvidia0" in devices
-
-
-# ─── _build_run_args userns ───────────────────────────────────────────────────
-
-
-class TestBuildRunArgsUserns:
-    def test_userns_keep_id_in_scratch_args(self, scratch_instance):
-        """--userns=keep-id must appear in run args for scratch instances."""
-        args = _build_run_args(scratch_instance)
-        assert "--userns=keep-id" in args
-
-    def test_userns_keep_id_in_fedora_args(self, fedora_instance):
-        """--userns=keep-id must appear in run args for fedora instances."""
-        args = _build_run_args(fedora_instance)
-        assert "--userns=keep-id" in args
-
-
-# ─── _build_run_args gpu + devices ────────────────────────────────────────────
-
-
-class TestBuildRunArgsGpuAndDevices:
-    def test_gpu_flag_adds_detected_devices(self, scratch_instance):
-        scratch_instance.config.gpu = True
-        with patch("scratch_monkey.overlay._gpu_devices", return_value=["/dev/dri", "/dev/kfd"]):
-            args = _build_run_args(scratch_instance)
-        assert "--device" in args
-        assert "/dev/dri" in args
-        assert "/dev/kfd" in args
-
-    def test_gpu_false_no_gpu_devices(self, scratch_instance):
-        scratch_instance.config.gpu = False
-        with patch("scratch_monkey.overlay._gpu_devices", return_value=["/dev/dri"]):
-            args = _build_run_args(scratch_instance)
-        # _gpu_devices should not be consulted at all
-        assert "/dev/dri" not in args
-
-    def test_extra_devices_added(self, scratch_instance):
-        scratch_instance.config.devices = ["/dev/video0", "/dev/bus/usb"]
-        args = _build_run_args(scratch_instance)
-        assert "--device" in args
-        assert "/dev/video0" in args
-        assert "/dev/bus/usb" in args
-
-    def test_no_devices_when_empty(self, scratch_instance):
-        scratch_instance.config.gpu = False
-        scratch_instance.config.devices = []
-        args = _build_run_args(scratch_instance)
-        assert "--device" not in args
-
-    def test_gpu_and_extra_devices_combined(self, scratch_instance):
-        scratch_instance.config.gpu = True
-        scratch_instance.config.devices = ["/dev/video0"]
-        with patch("scratch_monkey.overlay._gpu_devices", return_value=["/dev/dri"]):
-            args = _build_run_args(scratch_instance)
-        assert "/dev/dri" in args
-        assert "/dev/video0" in args
-
-
-# ─── _build_run_args shared volumes ────────────────────────────────────────────
-
-
-class TestBuildRunArgsSharedVolumes:
-    """Tests for shared volume expansion in _build_run_args."""
-
-    def test_shared_volume_rw_mount(self, scratch_instance, mock_runner, tmp_path):
-        """Shared volume with default rw mode mounts without :ro suffix."""
-        instances_dir = scratch_instance.directory.parent
-        shared_dir = instances_dir / ".shared" / "comms"
-        shared_dir.mkdir(parents=True)
-        scratch_instance.config.shared = ["comms"]
-
-        mock_runner.container_exists.return_value = False
-        ensure_running(scratch_instance, mock_runner, "scratch_dev")
-        call_args = mock_runner.run_daemon.call_args
-        run_args = call_args[0][2]
-        mount = f"{shared_dir}:/shared/comms"
-        assert mount in run_args
-
-    def test_shared_volume_ro_mount(self, scratch_instance, mock_runner, tmp_path):
-        """Shared volume with :ro suffix mounts with :ro."""
-        instances_dir = scratch_instance.directory.parent
-        shared_dir = instances_dir / ".shared" / "comms"
-        shared_dir.mkdir(parents=True)
-        scratch_instance.config.shared = ["comms:ro"]
-
-        mock_runner.container_exists.return_value = False
-        ensure_running(scratch_instance, mock_runner, "scratch_dev")
-        call_args = mock_runner.run_daemon.call_args
-        run_args = call_args[0][2]
-        mount = f"{shared_dir}:/shared/comms:ro"
-        assert mount in run_args
-
-    def test_missing_shared_volume_skipped(self, scratch_instance, mock_runner):
-        """Missing shared volume directory is silently skipped."""
-        scratch_instance.config.shared = ["nonexistent"]
-
-        mock_runner.container_exists.return_value = False
-        ensure_running(scratch_instance, mock_runner, "scratch_dev")
-        call_args = mock_runner.run_daemon.call_args
-        run_args = call_args[0][2]
-        assert not any("nonexistent" in arg for arg in run_args)
