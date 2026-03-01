@@ -54,10 +54,10 @@ class TestInstanceModelBaseImage:
             image_built=False,
             overlay_running=False,
             config=InstanceConfig(),
-            base_image="scratch_dev_fedora",
+            base_image="scratch_monkey_fedora",
         )
         m = InstanceModel.from_info(info)
-        assert m.base_image == "scratch_dev_fedora"
+        assert m.base_image == "scratch_monkey_fedora"
 
     def test_from_info_base_image_none_becomes_empty(self):
         info = InstanceInfo(

@@ -29,7 +29,7 @@ def test_ensure_overlay_id_generates_and_saves_when_empty(tmp_path):
     inst_dir = tmp_path / "geninstance"
     inst_dir.mkdir()
     (inst_dir / "home").mkdir()
-    (inst_dir / "Dockerfile").write_text("FROM scratch_dev\n")
+    (inst_dir / "Dockerfile").write_text("FROM scratch_monkey\n")
     (inst_dir / "scratch.toml").write_text("")
     (inst_dir / ".env").touch()
     inst = Instance(
@@ -59,31 +59,31 @@ def test_ensure_overlay_id_generates_and_saves_when_empty(tmp_path):
 class TestEnsureRunning:
     def test_creates_container_if_missing(self, scratch_instance, mock_runner):
         mock_runner.container_exists.return_value = False
-        ensure_running(scratch_instance, mock_runner, "scratch_dev")
+        ensure_running(scratch_instance, mock_runner, "scratch_monkey")
         mock_runner.run_daemon.assert_called_once()
 
     def test_starts_stopped_container(self, scratch_instance, mock_runner):
         mock_runner.container_exists.return_value = True
         mock_runner.container_running.return_value = False
-        ensure_running(scratch_instance, mock_runner, "scratch_dev")
+        ensure_running(scratch_instance, mock_runner, "scratch_monkey")
         mock_runner.start.assert_called_once_with("sm-testtest")
         mock_runner.run_daemon.assert_not_called()
 
     def test_does_nothing_if_already_running(self, scratch_instance, mock_runner):
         mock_runner.container_exists.return_value = True
         mock_runner.container_running.return_value = True
-        ensure_running(scratch_instance, mock_runner, "scratch_dev")
+        ensure_running(scratch_instance, mock_runner, "scratch_monkey")
         mock_runner.run_daemon.assert_not_called()
         mock_runner.start.assert_not_called()
 
     def test_returns_container_name(self, scratch_instance, mock_runner):
-        name = ensure_running(scratch_instance, mock_runner, "scratch_dev")
+        name = ensure_running(scratch_instance, mock_runner, "scratch_monkey")
         assert name == "sm-testtest"
 
     def test_skips_user_setup_for_scratch(self, scratch_instance, mock_runner):
         """Scratch instances must NOT run useradd/sudoers setup."""
         mock_runner.container_exists.return_value = False
-        ensure_running(scratch_instance, mock_runner, "scratch_dev")
+        ensure_running(scratch_instance, mock_runner, "scratch_monkey")
         # exec_capture should not be called for useradd on scratch instances
         for call_args in mock_runner.exec_capture.call_args_list:
             args = call_args[0][1]  # exec_args list
@@ -93,7 +93,7 @@ class TestEnsureRunning:
         """Fedora instances MUST run useradd + sudoers setup."""
         mock_runner.container_exists.return_value = False
         mock_runner.exec_capture.return_value = ""
-        ensure_running(fedora_instance, mock_runner, "scratch_dev_fedora")
+        ensure_running(fedora_instance, mock_runner, "scratch_monkey_fedora")
         # Should have called exec_capture for user setup
         mock_runner.exec_capture.assert_called()
         all_calls = mock_runner.exec_capture.call_args_list
@@ -105,7 +105,7 @@ class TestEnsureRunning:
 
     def test_includes_host_mounts_for_scratch(self, scratch_instance, mock_runner):
         mock_runner.container_exists.return_value = False
-        ensure_running(scratch_instance, mock_runner, "scratch_dev")
+        ensure_running(scratch_instance, mock_runner, "scratch_monkey")
         call_args = mock_runner.run_daemon.call_args
         run_args = call_args[0][2]  # third positional arg is run_args list
         assert "/usr:/usr:ro" in run_args
@@ -113,7 +113,7 @@ class TestEnsureRunning:
     def test_no_host_mounts_for_fedora(self, fedora_instance, mock_runner):
         mock_runner.container_exists.return_value = False
         mock_runner.exec_capture.return_value = ""
-        ensure_running(fedora_instance, mock_runner, "scratch_dev_fedora")
+        ensure_running(fedora_instance, mock_runner, "scratch_monkey_fedora")
         call_args = mock_runner.run_daemon.call_args
         run_args = call_args[0][2]
         assert "/usr:/usr:ro" not in run_args
@@ -123,7 +123,7 @@ class TestEnsureRunning:
         mock_runner.container_exists.return_value = False
         mock_runner.container_running.return_value = False
         mock_runner.exec_capture.return_value = ""
-        ensure_running(fedora_instance, mock_runner, "scratch_dev_fedora")
+        ensure_running(fedora_instance, mock_runner, "scratch_monkey_fedora")
 
         calls = mock_runner.exec_capture.call_args_list
         tee_call = None
@@ -150,7 +150,7 @@ class TestEnsureRunning:
         mock_runner.container_exists.return_value = False
         scratch_instance.config.wayland = True
         with patch("os.path.exists", return_value=False):
-            ensure_running(scratch_instance, mock_runner, "scratch_dev")
+            ensure_running(scratch_instance, mock_runner, "scratch_monkey")
         captured = capsys.readouterr()
         assert "Warning:" in captured.err
 

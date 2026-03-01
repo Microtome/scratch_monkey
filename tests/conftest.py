@@ -50,7 +50,7 @@ def scratch_instance(tmp_path: Path) -> Instance:
     inst_dir = tmp_path / "myinstance"
     inst_dir.mkdir()
     (inst_dir / "home").mkdir()
-    (inst_dir / "Dockerfile").write_text("FROM scratch_dev\n")
+    (inst_dir / "Dockerfile").write_text("FROM scratch_monkey\n")
     cfg = InstanceConfig(overlay_id="sm-testtest")
     (inst_dir / ".env").touch()
     cfg_save(inst_dir / "scratch.toml", cfg)
@@ -68,7 +68,7 @@ def fedora_instance(tmp_path: Path) -> Instance:
     inst_dir = tmp_path / "fedorainst"
     inst_dir.mkdir()
     (inst_dir / "home").mkdir()
-    (inst_dir / "Dockerfile").write_text("FROM scratch_dev_fedora\n")
+    (inst_dir / "Dockerfile").write_text("FROM scratch_monkey_fedora\n")
     cfg = InstanceConfig(overlay_id="sm-fedotest")
     (inst_dir / ".env").touch()
     cfg_save(inst_dir / "scratch.toml", cfg)

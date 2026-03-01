@@ -119,7 +119,7 @@ class TestBuildRunArgsSharedVolumes:
         scratch_instance.config.shared = ["comms"]
 
         mock_runner.container_exists.return_value = False
-        ensure_running(scratch_instance, mock_runner, "scratch_dev")
+        ensure_running(scratch_instance, mock_runner, "scratch_monkey")
         call_args = mock_runner.run_daemon.call_args
         run_args = call_args[0][2]
         mount = f"{shared_dir}:/shared/comms"
@@ -133,7 +133,7 @@ class TestBuildRunArgsSharedVolumes:
         scratch_instance.config.shared = ["comms:ro"]
 
         mock_runner.container_exists.return_value = False
-        ensure_running(scratch_instance, mock_runner, "scratch_dev")
+        ensure_running(scratch_instance, mock_runner, "scratch_monkey")
         call_args = mock_runner.run_daemon.call_args
         run_args = call_args[0][2]
         mount = f"{shared_dir}:/shared/comms:ro"
@@ -144,7 +144,7 @@ class TestBuildRunArgsSharedVolumes:
         scratch_instance.config.shared = ["nonexistent"]
 
         mock_runner.container_exists.return_value = False
-        ensure_running(scratch_instance, mock_runner, "scratch_dev")
+        ensure_running(scratch_instance, mock_runner, "scratch_monkey")
         call_args = mock_runner.run_daemon.call_args
         run_args = call_args[0][2]
         assert not any("nonexistent" in arg for arg in run_args)

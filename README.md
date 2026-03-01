@@ -222,7 +222,7 @@ The GUI provides:
 FROM golang:latest AS builder
 RUN go install github.com/some/tool@latest
 
-FROM scratch_dev
+FROM scratch_monkey
 COPY --from=builder /go/bin/tool /usr/local/bin/tool
 ```
 
@@ -231,7 +231,7 @@ COPY --from=builder /go/bin/tool /usr/local/bin/tool
 Full OS available — `RUN`, `COPY`, `ADD` all work:
 
 ```dockerfile
-FROM scratch_dev_fedora
+FROM scratch_monkey_fedora
 RUN dnf install -y git vim neovim
 ```
 
@@ -289,7 +289,7 @@ Global options (before the command):
 
 ```
 --instances-dir TEXT   Default: ~/scratch-monkey
---base-image TEXT      Default: scratch_dev
+--base-image TEXT      Default: scratch_monkey
 ```
 
 ---

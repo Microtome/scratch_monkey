@@ -15,7 +15,7 @@ def instance(tmp_path):
     inst_dir.mkdir()
     home_dir = inst_dir / "home"
     home_dir.mkdir()
-    (inst_dir / "Dockerfile").write_text("FROM scratch_dev\n")
+    (inst_dir / "Dockerfile").write_text("FROM scratch_monkey\n")
     return Instance(
         name="myinstance",
         directory=inst_dir,
@@ -95,7 +95,7 @@ class TestExportCommand:
         inst_dir.mkdir()
         home_dir = inst_dir / "home"
         home_dir.mkdir()
-        (inst_dir / "Dockerfile").write_text("FROM scratch_dev\n")
+        (inst_dir / "Dockerfile").write_text("FROM scratch_monkey\n")
         inst = Instance(
             name="myinstance",
             directory=inst_dir,

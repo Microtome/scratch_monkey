@@ -11,8 +11,8 @@ from .shared import parse_shared_entry
 
 # ── Constants ────────────────────────────────────────────────────────────────
 
-DEFAULT_BASE_IMAGE = "scratch_dev"
-FEDORA_IMAGE = "scratch_dev_fedora"
+DEFAULT_BASE_IMAGE = "scratch_monkey"
+FEDORA_IMAGE = "scratch_monkey_fedora"
 
 # Path to this package's project directory (where Dockerfiles live)
 PROJECT_DIR = Path(__file__).parent.parent.parent

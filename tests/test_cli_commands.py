@@ -14,7 +14,7 @@ def _make_instance_dir(tmp_path: Path, name: str, toml_content: str = "") -> Pat
     inst_dir = tmp_path / name
     inst_dir.mkdir()
     (inst_dir / "home").mkdir()
-    (inst_dir / "Dockerfile").write_text("FROM scratch_dev\n")
+    (inst_dir / "Dockerfile").write_text("FROM scratch_monkey\n")
     (inst_dir / "scratch.toml").write_text(toml_content)
     (inst_dir / ".env").touch()
     return inst_dir

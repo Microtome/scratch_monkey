@@ -66,7 +66,7 @@ def export_command(
     instance: Instance,
     cmd: str,
     bin_name: str = "",
-    base_image: str = "scratch_dev",
+    base_image: str = "scratch_monkey",
     bin_dir: Path | None = None,
 ) -> Path:
     """Generate a wrapper script for a command in an instance.

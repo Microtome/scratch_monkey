@@ -28,7 +28,7 @@ def make_instance(instances_dir: Path, name: str, shared: list[str] | None = Non
     inst_dir = instances_dir / name
     inst_dir.mkdir()
     (inst_dir / "home").mkdir()
-    (inst_dir / "Dockerfile").write_text("FROM scratch_dev\n")
+    (inst_dir / "Dockerfile").write_text("FROM scratch_monkey\n")
     cfg = InstanceConfig(shared=shared or [])
     from scratch_monkey.config import save
     save(inst_dir / "scratch.toml", cfg)

@@ -286,14 +286,14 @@ Use multi-stage builds to compile tools and `COPY` them in:
 FROM golang:latest AS builder
 RUN go install github.com/some/tool@latest
 
-FROM scratch_dev
+FROM scratch_monkey
 COPY --from=builder /go/bin/tool /usr/local/bin/tool
 ```
 
 For fedora instances, everything works normally:
 
 ```dockerfile
-FROM scratch_dev_fedora
+FROM scratch_monkey_fedora
 RUN dnf install -y git vim neovim
 ```
 
@@ -678,7 +678,7 @@ graph TD
         end
 
         subgraph right["Instance Detail"]
-            TITLE["fedora-dev<br/>Path: ~/scratch-monkey/fedora-dev<br/>Base: scratch_dev_fedora"]
+            TITLE["fedora-dev<br/>Path: ~/scratch-monkey/fedora-dev<br/>Base: scratch_monkey_fedora"]
 
             subgraph actions["Actions"]
                 ROW1["[Enter] [Enter as Root] [Build] [Reset]"]
@@ -734,7 +734,7 @@ scratch-monkey [--instances-dir DIR] [--base-image IMAGE] COMMAND
 | Option | Default | Description |
 |--------|---------|-------------|
 | `--instances-dir` | `~/scratch-monkey` | Where instances are stored |
-| `--base-image` | `scratch_dev` | Default base image for new instances |
+| `--base-image` | `scratch_monkey` | Default base image for new instances |
 
 ### Commands
 

@@ -18,7 +18,7 @@ def _make_instance(tmp_path: Path, name: str = "testinst") -> Instance:
     inst_dir = tmp_path / "instances" / name
     inst_dir.mkdir(parents=True)
     (inst_dir / "home").mkdir()
-    (inst_dir / "Dockerfile").write_text("FROM scratch_dev\n")
+    (inst_dir / "Dockerfile").write_text("FROM scratch_monkey\n")
     cfg = InstanceConfig()
     save(inst_dir / "scratch.toml", cfg)
     return Instance(

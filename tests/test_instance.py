@@ -24,7 +24,7 @@ from scratch_monkey.instance import (
 
 class TestCreate:
     def test_creates_directory_structure(self, instances_dir, project_dir):
-        inst = create("myproject", instances_dir, "scratch_dev", project_dir)
+        inst = create("myproject", instances_dir, "scratch_monkey", project_dir)
         assert inst.directory.is_dir()
         assert (inst.directory / "home").is_dir()
         assert (inst.directory / "scratch.toml").exists()
@@ -32,40 +32,40 @@ class TestCreate:
         assert (inst.directory / ".env").exists()
 
     def test_returns_instance_with_correct_name(self, instances_dir, project_dir):
-        inst = create("myproject", instances_dir, "scratch_dev", project_dir)
+        inst = create("myproject", instances_dir, "scratch_monkey", project_dir)
         assert inst.name == "myproject"
 
     def test_home_dir_is_inside_instance(self, instances_dir, project_dir):
-        inst = create("myproject", instances_dir, "scratch_dev", project_dir)
+        inst = create("myproject", instances_dir, "scratch_monkey", project_dir)
         assert inst.home_dir == inst.directory / "home"
 
     def test_scratch_dockerfile_content(self, instances_dir, project_dir):
-        inst = create("myproject", instances_dir, "scratch_dev", project_dir)
+        inst = create("myproject", instances_dir, "scratch_monkey", project_dir)
         content = (inst.directory / "Dockerfile").read_text()
-        assert "FROM scratch_dev" in content
+        assert "FROM scratch_monkey" in content
         assert "RUN does not" in content
 
     def test_fedora_dockerfile_content(self, instances_dir, project_dir):
-        inst = create("myproject", instances_dir, "scratch_dev_fedora", project_dir)
+        inst = create("myproject", instances_dir, "scratch_monkey_fedora", project_dir)
         content = (inst.directory / "Dockerfile").read_text()
-        assert "FROM scratch_dev_fedora" in content
+        assert "FROM scratch_monkey_fedora" in content
         assert "Full Fedora base" in content
 
     def test_raises_if_already_exists(self, instances_dir, project_dir):
-        create("myproject", instances_dir, "scratch_dev", project_dir)
+        create("myproject", instances_dir, "scratch_monkey", project_dir)
         with pytest.raises(InstanceError, match="already exists"):
-            create("myproject", instances_dir, "scratch_dev", project_dir)
+            create("myproject", instances_dir, "scratch_monkey", project_dir)
 
     def test_invalid_name_raises(self, instances_dir, project_dir):
         from scratch_monkey.config import ConfigError
         with pytest.raises(ConfigError):
-            create("-invalid", instances_dir, "scratch_dev", project_dir)
+            create("-invalid", instances_dir, "scratch_monkey", project_dir)
 
     def test_creates_without_default_toml(self, instances_dir, tmp_path):
         """Falls back to InstanceConfig() if no scratch.toml.default found."""
         project_dir = tmp_path / "project"
         project_dir.mkdir()
-        inst = create("myproject", instances_dir, "scratch_dev", project_dir)
+        inst = create("myproject", instances_dir, "scratch_monkey", project_dir)
         assert (inst.directory / "scratch.toml").exists()
 
 
@@ -75,7 +75,7 @@ class TestCreate:
 class TestClone:
     @pytest.fixture
     def source_instance(self, instances_dir, project_dir):
-        return create("source", instances_dir, "scratch_dev", project_dir)
+        return create("source", instances_dir, "scratch_monkey", project_dir)
 
     def test_creates_dest_directory(self, instances_dir, source_instance):
         inst = clone("source", "dest", instances_dir)
@@ -102,8 +102,8 @@ class TestClone:
             clone("missing", "dest", instances_dir)
 
     def test_raises_if_dest_exists(self, instances_dir, project_dir):
-        create("source", instances_dir, "scratch_dev", project_dir)
-        create("dest", instances_dir, "scratch_dev", project_dir)
+        create("source", instances_dir, "scratch_monkey", project_dir)
+        create("dest", instances_dir, "scratch_monkey", project_dir)
         with pytest.raises(InstanceError, match="already exists"):
             clone("source", "dest", instances_dir)
 
@@ -132,18 +132,18 @@ class TestClone:
 
 class TestDelete:
     def test_removes_directory(self, instances_dir, project_dir, mock_runner):
-        create("myproject", instances_dir, "scratch_dev", project_dir)
+        create("myproject", instances_dir, "scratch_monkey", project_dir)
         delete("myproject", instances_dir, mock_runner)
         assert not (instances_dir / "myproject").exists()
 
     def test_removes_image_if_exists(self, instances_dir, project_dir, mock_runner):
-        create("myproject", instances_dir, "scratch_dev", project_dir)
+        create("myproject", instances_dir, "scratch_monkey", project_dir)
         mock_runner.image_exists.return_value = True
         delete("myproject", instances_dir, mock_runner)
         mock_runner.rmi.assert_called_once_with("myproject")
 
     def test_skips_rmi_if_no_image(self, instances_dir, project_dir, mock_runner):
-        create("myproject", instances_dir, "scratch_dev", project_dir)
+        create("myproject", instances_dir, "scratch_monkey", project_dir)
         mock_runner.image_exists.return_value = False
         delete("myproject", instances_dir, mock_runner)
         mock_runner.rmi.assert_not_called()
@@ -153,13 +153,13 @@ class TestDelete:
             delete("missing", instances_dir, mock_runner)
 
     def test_delete_removes_overlay_container(self, instances_dir, project_dir, mock_runner):
-        create("myproject", instances_dir, "scratch_dev", project_dir)
+        create("myproject", instances_dir, "scratch_monkey", project_dir)
         mock_runner.container_exists.return_value = True
         delete("myproject", instances_dir, mock_runner)
         mock_runner.remove.assert_called_with("myproject-overlay", force=True)
 
     def test_delete_skips_overlay_when_not_exists(self, instances_dir, project_dir, mock_runner):
-        create("myproject", instances_dir, "scratch_dev", project_dir)
+        create("myproject", instances_dir, "scratch_monkey", project_dir)
         mock_runner.container_exists.return_value = False
         delete("myproject", instances_dir, mock_runner)
         # Verify remove was not called with the overlay name
@@ -183,33 +183,33 @@ class TestListAll:
         assert result == []
 
     def test_lists_instances(self, instances_dir, project_dir, mock_runner):
-        create("alpha", instances_dir, "scratch_dev", project_dir)
-        create("beta", instances_dir, "scratch_dev", project_dir)
+        create("alpha", instances_dir, "scratch_monkey", project_dir)
+        create("beta", instances_dir, "scratch_monkey", project_dir)
         result = list_all(instances_dir, mock_runner)
         names = [i.name for i in result]
         assert "alpha" in names
         assert "beta" in names
 
     def test_skips_hidden_dirs(self, instances_dir, project_dir, mock_runner):
-        create("myproject", instances_dir, "scratch_dev", project_dir)
+        create("myproject", instances_dir, "scratch_monkey", project_dir)
         (instances_dir / ".shared").mkdir()
         result = list_all(instances_dir, mock_runner)
         names = [i.name for i in result]
         assert ".shared" not in names
 
     def test_image_built_reflects_runner(self, instances_dir, project_dir, mock_runner):
-        create("myproject", instances_dir, "scratch_dev", project_dir)
+        create("myproject", instances_dir, "scratch_monkey", project_dir)
         mock_runner.image_exists.return_value = True
         result = list_all(instances_dir, mock_runner)
         assert result[0].image_built is True
 
     def test_list_all_populates_base_image(self, instances_dir, project_dir, mock_runner):
-        create("scratch-inst", instances_dir, "scratch_dev", project_dir)
-        create("fedora-inst", instances_dir, "scratch_dev_fedora", project_dir)
+        create("scratch-inst", instances_dir, "scratch_monkey", project_dir)
+        create("fedora-inst", instances_dir, "scratch_monkey_fedora", project_dir)
         result = list_all(instances_dir, mock_runner)
         by_name = {r.name: r for r in result}
-        assert by_name["scratch-inst"].base_image == "scratch_dev"
-        assert by_name["fedora-inst"].base_image == "scratch_dev_fedora"
+        assert by_name["scratch-inst"].base_image == "scratch_monkey"
+        assert by_name["fedora-inst"].base_image == "scratch_monkey_fedora"
 
 
 # ─── skel_copy ────────────────────────────────────────────────────────────────
@@ -227,7 +227,7 @@ class TestSkelCopy:
         return patch("scratch_monkey.instance.Path", side_effect=_side_effect)
 
     def test_copies_skel_files(self, instances_dir, project_dir, tmp_path):
-        inst = create("myproject", instances_dir, "scratch_dev", project_dir)
+        inst = create("myproject", instances_dir, "scratch_monkey", project_dir)
         fake_skel = tmp_path / "fake_skel"
         fake_skel.mkdir()
         (fake_skel / ".bashrc").write_text("# bashrc")
@@ -239,7 +239,7 @@ class TestSkelCopy:
         assert (inst.home_dir / ".bashrc").read_text() == "# bashrc"
 
     def test_skips_existing_files(self, instances_dir, project_dir, tmp_path):
-        inst = create("myproject", instances_dir, "scratch_dev", project_dir)
+        inst = create("myproject", instances_dir, "scratch_monkey", project_dir)
         (inst.home_dir / ".bashrc").write_text("existing")
         fake_skel = tmp_path / "fake_skel"
         fake_skel.mkdir()
@@ -252,7 +252,7 @@ class TestSkelCopy:
         assert (inst.home_dir / ".bashrc").read_text() == "existing"
 
     def test_copies_directories(self, instances_dir, project_dir, tmp_path):
-        inst = create("myproject", instances_dir, "scratch_dev", project_dir)
+        inst = create("myproject", instances_dir, "scratch_monkey", project_dir)
         fake_skel = tmp_path / "fake_skel"
         fake_skel.mkdir()
         (fake_skel / ".config").mkdir()
@@ -264,7 +264,7 @@ class TestSkelCopy:
         assert (inst.home_dir / ".config" / "app.conf").read_text() == "key=val"
 
     def test_returns_empty_when_skel_missing(self, instances_dir, project_dir, tmp_path):
-        inst = create("myproject", instances_dir, "scratch_dev", project_dir)
+        inst = create("myproject", instances_dir, "scratch_monkey", project_dir)
         with self._patch_skel(tmp_path / "nonexistent"):
             from scratch_monkey.instance import skel_copy
             copied = skel_copy(inst)
@@ -279,21 +279,21 @@ class TestDetectBaseImage:
         assert detect_base_image(tmp_path) is None
 
     def test_returns_last_from(self, tmp_path):
-        (tmp_path / "Dockerfile").write_text("FROM builder AS build\nFROM scratch_dev\n")
-        assert detect_base_image(tmp_path) == "scratch_dev"
+        (tmp_path / "Dockerfile").write_text("FROM builder AS build\nFROM scratch_monkey\n")
+        assert detect_base_image(tmp_path) == "scratch_monkey"
 
     def test_returns_single_from(self, tmp_path):
-        (tmp_path / "Dockerfile").write_text("FROM scratch_dev_fedora\n")
-        assert detect_base_image(tmp_path) == "scratch_dev_fedora"
+        (tmp_path / "Dockerfile").write_text("FROM scratch_monkey_fedora\n")
+        assert detect_base_image(tmp_path) == "scratch_monkey_fedora"
 
 
 class TestIsFedoraBased:
     def test_true_for_fedora_image(self, tmp_path):
-        (tmp_path / "Dockerfile").write_text("FROM scratch_dev_fedora\n")
+        (tmp_path / "Dockerfile").write_text("FROM scratch_monkey_fedora\n")
         assert is_fedora_based(tmp_path) is True
 
     def test_false_for_scratch_image(self, tmp_path):
-        (tmp_path / "Dockerfile").write_text("FROM scratch_dev\n")
+        (tmp_path / "Dockerfile").write_text("FROM scratch_monkey\n")
         assert is_fedora_based(tmp_path) is False
 
     def test_false_for_no_dockerfile(self, tmp_path):
@@ -301,7 +301,7 @@ class TestIsFedoraBased:
 
     def test_uses_last_from_line(self, tmp_path):
         (tmp_path / "Dockerfile").write_text(
-            "FROM fedora:latest AS builder\nRUN echo hi\nFROM scratch_dev\n"
+            "FROM fedora:latest AS builder\nRUN echo hi\nFROM scratch_monkey\n"
         )
         assert is_fedora_based(tmp_path) is False
 
@@ -315,7 +315,7 @@ class TestDeleteOverlayId:
         inst_dir = instances_dir / "myproject"
         inst_dir.mkdir(parents=True)
         (inst_dir / "home").mkdir()
-        (inst_dir / "Dockerfile").write_text("FROM scratch_dev\n")
+        (inst_dir / "Dockerfile").write_text("FROM scratch_monkey\n")
         (inst_dir / ".env").touch()
         cfg = InstanceConfig(overlay_id=overlay_id)
         save(inst_dir / "scratch.toml", cfg)
@@ -346,7 +346,7 @@ class TestListAllOverlayId:
         inst_dir = instances_dir / "testinst"
         inst_dir.mkdir()
         (inst_dir / "home").mkdir()
-        (inst_dir / "Dockerfile").write_text("FROM scratch_dev\n")
+        (inst_dir / "Dockerfile").write_text("FROM scratch_monkey\n")
         (inst_dir / ".env").touch()
         cfg = InstanceConfig(overlay_id="sm-cafebabe")
         save(inst_dir / "scratch.toml", cfg)
@@ -362,7 +362,7 @@ class TestListAllOverlayId:
         inst_dir = instances_dir / "testinst"
         inst_dir.mkdir()
         (inst_dir / "home").mkdir()
-        (inst_dir / "Dockerfile").write_text("FROM scratch_dev\n")
+        (inst_dir / "Dockerfile").write_text("FROM scratch_monkey\n")
         (inst_dir / ".env").touch()
         cfg = InstanceConfig(overlay_id="")
         save(inst_dir / "scratch.toml", cfg)
@@ -380,7 +380,7 @@ class TestCloneOverlayId:
     def test_clone_clears_overlay_id(self, instances_dir, project_dir, mock_runner):
         """Cloning an instance with overlay_id set results in empty overlay_id on clone."""
         # Create source with overlay_id
-        create("source", instances_dir, "scratch_dev", project_dir)
+        create("source", instances_dir, "scratch_monkey", project_dir)
         src_cfg = InstanceConfig(overlay_id="sm-original")
         save(instances_dir / "source" / "scratch.toml", src_cfg)
 
@@ -394,7 +394,7 @@ class TestCloneOverlayId:
 
     def test_clone_without_overlay_id_stays_empty(self, instances_dir, project_dir):
         """Cloning an instance without overlay_id keeps it empty."""
-        create("source", instances_dir, "scratch_dev", project_dir)
+        create("source", instances_dir, "scratch_monkey", project_dir)
         result = clone("source", "dest", instances_dir)
         assert result.config.overlay_id == ""
 
@@ -405,7 +405,7 @@ class TestCloneOverlayId:
 class TestRename:
     def _make_instance(self, instances_dir: Path, name: str, project_dir: Path) -> None:
         """Helper to create a minimal instance directory."""
-        create(name, instances_dir, "scratch_dev", project_dir)
+        create(name, instances_dir, "scratch_monkey", project_dir)
 
     def test_rename_moves_directory(self, instances_dir, project_dir, mock_runner):
         """rename() renames the instance directory."""
@@ -494,7 +494,7 @@ class TestRename:
 class TestRenameCli:
     def test_rename_cli_success(self, instances_dir, project_dir, mock_runner):
         """CLI rename prints success message."""
-        create("old", instances_dir, "scratch_dev", project_dir)
+        create("old", instances_dir, "scratch_monkey", project_dir)
         runner_cli = CliRunner()
         with patch("scratch_monkey.cli.main.PodmanRunner", return_value=mock_runner):
             result = runner_cli.invoke(
