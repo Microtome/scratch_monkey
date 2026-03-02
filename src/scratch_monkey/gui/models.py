@@ -353,8 +353,6 @@ class AppModel(Atom):
 
         self._run_async("Refreshing...", work, on_success, on_error)
 
-    # ── actions ──────────────────────────────────────────────────────────────
-
     def enter_instance(self, name: str, *, root: bool = False) -> None:
         """Open a terminal running scratch-monkey enter for the named instance."""
         cmd = ["scratch-monkey", "enter", name]
@@ -394,8 +392,8 @@ class AppModel(Atom):
                 self.status_message = f"No overlay container found for {name!r}"
 
         def on_error(exc):
-            self.status_message = f"Error: {exc}"
             self.refresh()
+            self.status_message = f"Error: {exc}"
 
         self._run_async(f"Resetting overlay for {name!r}...", work, on_success, on_error)
 
@@ -416,8 +414,8 @@ class AppModel(Atom):
             self.status_message = f"Deleted {name!r}"
 
         def on_error(exc):
-            self.status_message = f"Error: {exc}"
             self.refresh()
+            self.status_message = f"Error: {exc}"
 
         self._run_async(f"Deleting {name!r}...", work, on_success, on_error)
 
