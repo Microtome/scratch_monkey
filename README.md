@@ -12,15 +12,27 @@ Each **instance** is a named environment with its own home directory, customizab
 ## Install
 
 ```bash
-# Recommended: run the install script (installs uv if needed, then the tool)
+# Clone and run the install script
+git clone https://github.com/djoyce/scratch-monkey.git
+cd scratch-monkey
 ./install.sh
 
-# Or manually with uv:
+# With GUI support:
+./install.sh --gui
+```
+
+The install script checks for [uv](https://github.com/astral-sh/uv) and offers to install it if missing, then installs scratch-monkey into `~/.local/bin`.
+
+<details>
+<summary>Manual install (without install.sh)</summary>
+
+```bash
 uv tool install --editable .
 
 # With GUI support:
 uv tool install --editable ".[gui]"
 ```
+</details>
 
 Ensure `~/.local/bin` is in your `PATH`.
 
@@ -82,6 +94,9 @@ scratch-monkey run   <name>               # same as enter
 scratch-monkey run   <name> --wayland     # override: enable Wayland
 scratch-monkey run   <name> --ssh         # override: enable SSH agent
 scratch-monkey run   <name> --cmd /bin/zsh
+
+scratch-monkey start <name>               # start overlay container (headless)
+scratch-monkey stop  <name>               # stop overlay container
 ```
 
 ---
@@ -279,6 +294,8 @@ Fedora instances use their own filesystem — no host system mounts.
 | `build-instance <name>` | Build an instance's Dockerfile |
 | `run <name>` | Run an instance (`--root`, `--wayland`, `--ssh`, `--cmd`) |
 | `enter <name>` | Interactive shell (`--root` for root) |
+| `start <name>` | Start overlay container (creates if needed) |
+| `stop <name>` | Stop overlay container |
 | `reset <name>` | Remove overlay container (`--yes` to skip confirm) |
 | `export <name> <cmd> [bin]` | Export a command to `~/.local/bin` |
 | `unexport <bin>` | Remove an exported command |

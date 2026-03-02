@@ -187,7 +187,7 @@ There are two fundamentally different base image types:
 | | Scratch | Fedora |
 |--|---------|--------|
 | Base | Empty (`FROM scratch`) | `FROM fedora:latest` |
-| Host mounts | `/usr`, `/etc`, `/var/usrlocal`, `/var/opt` (ro) | None |
+| Host mounts | `/usr`, `/etc`, `/var/usrlocal`, `/var/opt` (ro) + tmpfs `/tmp` | None |
 | Package manager | Host's (via bind mount) | Container's own `dnf` |
 | Image size | ~KB (just symlinks) | ~500MB+ |
 | `RUN` in Dockerfile | No (no shell) | Yes |
@@ -243,6 +243,7 @@ graph LR
         C3["/usr/local/"]
         C4["/var/opt/"]
         C5["/home/user/"]
+        C6["/tmp/ (tmpfs)"]
     end
 
     H1 -->|mount ro| C1
@@ -251,6 +252,7 @@ graph LR
     H4 -->|mount ro| C4
 
     HOME["instance home/ (read-write)"] -->|mount rw| C5
+    TMPFS["(in-memory tmpfs)"] -->|"--tmpfs"| C6
 ```
 
 ### Fedora base image
@@ -402,6 +404,7 @@ graph TD
             M2["/etc:/etc:ro"]
             M3["/var/usrlocal:...:ro"]
             M4["/var/opt:/var/opt:ro"]
+            M8["--tmpfs /tmp"]
         end
         subgraph fedora_mounts["Fedora"]
             M5["(none — self-contained)"]
@@ -627,7 +630,7 @@ All fields in `scratch.toml` are optional.
 | `home` | string | `""` | Override home dir (empty = instance `home/`) |
 | `overlay` | bool | `false` | Enable persistent overlay container |
 | `gpu` | bool | `false` | Auto-detect and pass through GPU devices |
-| `volumes` | list | `[]` | Extra bind mounts (`host:container[:mode]`) |
+| `volumes` | list | `[]` | Extra bind mounts (`host:container:mode`); mode defaults to `ro` if omitted |
 | `env` | list | `[]` | Extra environment variables (`KEY=value`) |
 | `shared` | list | `[]` | Shared volume names (`name` or `name:ro`) |
 | `devices` | list | `[]` | Extra device paths to pass through |
@@ -671,14 +674,15 @@ graph TD
     subgraph window["scratch-monkey GUI"]
         direction LR
         subgraph left["Instance List"]
-            I1["fedora-dev [C][R][X]"]
-            I2["myproject [C][R][X]"]
-            I3["tools [C][R][X]"]
+            I1["● fedora-dev [⧉][✎][✗]"]
+            I2["● myproject [⧉][✎][✗]"]
+            I3["○ tools [⧉][✎][✗]"]
             NI["[+ New Instance]"]
         end
 
         subgraph right["Instance Detail"]
-            TITLE["fedora-dev<br/>Path: ~/scratch-monkey/fedora-dev<br/>Base: scratch_monkey_fedora"]
+            TITLE["fedora-dev<br/>Base: scratch_monkey_fedora"]
+            PATHS["[❐][⌘] Path: ~/scratch-monkey/fedora-dev<br/>[⌂][⌘] Home: ~/scratch-monkey/fedora-dev/home"]
 
             subgraph actions["Actions"]
                 ROW1["[Enter] [Enter as Root] [Build] [Reset]"]
@@ -692,7 +696,7 @@ graph TD
             end
 
             subgraph volumes["Volume Mounts"]
-                VOL["[host path] [container path] [rw] [X]<br/>[+ Add Volume Mount]"]
+                VOL["[host path] [container path] [ro] [X]<br/>[+ Add Volume Mount]"]
             end
 
             subgraph envvars["Environment Variables"]
@@ -712,14 +716,18 @@ graph TD
 
 ### Key features
 
-- **Instance list**: Status indicators (running/built/no image), base type (F for fedora),
-  clone/rename/delete buttons per instance
+- **Instance list**: Start/stop toggle button (click to start or stop overlay),
+  base type indicator (F for fedora), clone/rename/delete buttons per instance
+- **Quick-open buttons**: Open instance path or home directory in file manager (❐/⌂)
+  or terminal (⌘) directly from the detail panel header
 - **Config editing**: All scratch.toml fields editable in-place, dirty tracking
   with save/revert, orange highlight on unsaved changes
 - **Actions**: Enter, build, reset overlay, export commands, edit files in terminal
 - **Edit Config**: Opens scratch.toml in `$VISUAL`/`$EDITOR`, auto-reloads on close
 - **Create dialog**: Name, fedora toggle, skel toggle, full config editor
+- **Volume mounts**: Defaults to read-only for safety; mode always written explicitly
 - **Shared volumes**: Toggle per-instance, create new volumes inline
+- **Live status polling**: Overlay and image status updates in-place every 5 seconds
 
 ---
 
@@ -751,6 +759,8 @@ scratch-monkey [--instances-dir DIR] [--base-image IMAGE] COMMAND
 | `build-instance <name>` | Build instance Dockerfile (auto-builds base) |
 | `enter <name> [--root]` | Interactive shell |
 | `run <name> [--root] [--wayland] [--ssh] [--cmd CMD]` | Run with overrides |
+| `start <name>` | Start overlay container (creates if needed, enables overlay mode) |
+| `stop <name>` | Stop overlay container |
 | `reset <name> [--yes]` | Remove overlay container |
 | `export <name> <cmd> [bin]` | Export command to ~/.local/bin |
 | `unexport <bin>` | Remove exported command |

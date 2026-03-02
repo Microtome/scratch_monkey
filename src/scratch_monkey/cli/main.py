@@ -23,7 +23,7 @@ from ..instance import (
     rename,
     skel_copy,
 )
-from ..overlay import ensure_running, exec_shell
+from ..overlay import OverlayError, ensure_running, exec_shell
 from ..overlay import reset as overlay_reset
 from ..run_args import (
     DEFAULT_BASE_IMAGE,
@@ -331,6 +331,73 @@ def enter(ctx: click.Context, name: str, root: bool) -> None:
     runner: PodmanRunner = ctx.obj["runner"]
     inst = _get_instance(instances_dir, name)
     _run_instance(inst, runner, ctx.obj["base_image"], root=root)
+
+
+@cli.command()
+@click.argument("name")
+@click.pass_context
+def start(ctx: click.Context, name: str) -> None:
+    """Start an instance's overlay container.
+
+    Creates the overlay container if it doesn't exist, or starts it if stopped.
+    Implies overlay mode — sets overlay=true in scratch.toml if not already set.
+    """
+    instances_dir: Path = ctx.obj["instances_dir"]
+    runner: PodmanRunner = ctx.obj["runner"]
+    inst = _get_instance(instances_dir, name)
+
+    if not inst.config.overlay:
+        inst.config.overlay = True
+        from ..config import save as config_save
+
+        config_save(inst.directory / "scratch.toml", inst.config)
+        click.echo(f"Enabled overlay mode for {name!r}")
+
+    # Determine image
+    if runner.image_exists(name):
+        image = name
+    else:
+        instance_base = detect_base_image(inst.directory) or ctx.obj["base_image"]
+        image = instance_base
+        if not runner.image_exists(image):
+            click.echo(f"Base image {image!r} not found, building...")
+            if "fedora" in image:
+                runner.build(image, str(PROJECT_DIR), dockerfile=str(PROJECT_DIR / "Dockerfile.fedora"))
+            else:
+                runner.build(image, str(PROJECT_DIR))
+
+    try:
+        container_name = ensure_running(inst, runner, image)
+    except (PodmanError, OverlayError) as e:
+        click.echo(f"Error: {e}", err=True)
+        sys.exit(1)
+    click.echo(f"Started {name!r} (container: {container_name})")
+
+
+@cli.command()
+@click.argument("name")
+@click.pass_context
+def stop(ctx: click.Context, name: str) -> None:
+    """Stop an instance's overlay container."""
+    instances_dir: Path = ctx.obj["instances_dir"]
+    runner: PodmanRunner = ctx.obj["runner"]
+    inst = _get_instance(instances_dir, name)
+
+    overlay_name = inst.config.overlay_id or f"{name}-overlay"
+    if not runner.container_exists(overlay_name):
+        click.echo(f"No overlay container found for {name!r}")
+        return
+
+    if not runner.container_running(overlay_name):
+        click.echo(f"Overlay container for {name!r} is already stopped")
+        return
+
+    try:
+        runner.stop(overlay_name)
+    except PodmanError as e:
+        click.echo(f"Error: {e}", err=True)
+        sys.exit(1)
+    click.echo(f"Stopped {name!r}")
 
 
 @cli.command()

@@ -100,6 +100,85 @@ class TestEnterCommand:
         assert result.exit_code != 0
 
 
+class TestStartCommand:
+    def test_start_creates_overlay(self, tmp_path):
+        _make_instance_dir(tmp_path, "testinst", 'overlay = true\noverlay_id = "sm-test123"\n')
+        mock = MagicMock(spec=PodmanRunner)
+        mock.image_exists.return_value = True
+        mock.container_exists.return_value = False
+        r = CliRunner()
+        with patch("scratch_monkey.cli.main.PodmanRunner", return_value=mock):
+            result = r.invoke(cli, ["--instances-dir", str(tmp_path), "start", "testinst"])
+        assert result.exit_code == 0
+        assert "Started" in result.output
+        assert mock.run_daemon.called
+
+    def test_start_enables_overlay_if_not_set(self, tmp_path):
+        _make_instance_dir(tmp_path, "testinst")
+        mock = MagicMock(spec=PodmanRunner)
+        mock.image_exists.return_value = True
+        mock.container_exists.return_value = False
+        r = CliRunner()
+        with patch("scratch_monkey.cli.main.PodmanRunner", return_value=mock):
+            result = r.invoke(cli, ["--instances-dir", str(tmp_path), "start", "testinst"])
+        assert result.exit_code == 0
+        assert "Enabled overlay mode" in result.output
+        # Config should now have overlay = true
+        toml_text = (tmp_path / "testinst" / "scratch.toml").read_text()
+        assert "overlay = true" in toml_text
+
+    def test_start_nonexistent(self, tmp_path):
+        d = tmp_path / "instances"
+        d.mkdir()
+        r = CliRunner()
+        with patch("scratch_monkey.cli.main.PodmanRunner", return_value=MagicMock(spec=PodmanRunner)):
+            result = r.invoke(cli, ["--instances-dir", str(d), "start", "ghost"])
+        assert result.exit_code != 0
+
+
+class TestStopCommand:
+    def test_stop_running_container(self, tmp_path):
+        _make_instance_dir(tmp_path, "testinst", 'overlay_id = "sm-test123"\n')
+        mock = MagicMock(spec=PodmanRunner)
+        mock.container_exists.return_value = True
+        mock.container_running.return_value = True
+        r = CliRunner()
+        with patch("scratch_monkey.cli.main.PodmanRunner", return_value=mock):
+            result = r.invoke(cli, ["--instances-dir", str(tmp_path), "stop", "testinst"])
+        assert result.exit_code == 0
+        assert "Stopped" in result.output
+        mock.stop.assert_called_once_with("sm-test123")
+
+    def test_stop_already_stopped(self, tmp_path):
+        _make_instance_dir(tmp_path, "testinst", 'overlay_id = "sm-test123"\n')
+        mock = MagicMock(spec=PodmanRunner)
+        mock.container_exists.return_value = True
+        mock.container_running.return_value = False
+        r = CliRunner()
+        with patch("scratch_monkey.cli.main.PodmanRunner", return_value=mock):
+            result = r.invoke(cli, ["--instances-dir", str(tmp_path), "stop", "testinst"])
+        assert result.exit_code == 0
+        assert "already stopped" in result.output
+
+    def test_stop_no_overlay(self, tmp_path):
+        _make_instance_dir(tmp_path, "testinst")
+        mock = MagicMock(spec=PodmanRunner)
+        mock.container_exists.return_value = False
+        r = CliRunner()
+        with patch("scratch_monkey.cli.main.PodmanRunner", return_value=mock):
+            result = r.invoke(cli, ["--instances-dir", str(tmp_path), "stop", "testinst"])
+        assert result.exit_code == 0
+        assert "No overlay container found" in result.output
+
+    def test_stop_nonexistent(self, tmp_path):
+        d = tmp_path / "instances"
+        d.mkdir()
+        r = CliRunner()
+        with patch("scratch_monkey.cli.main.PodmanRunner", return_value=MagicMock(spec=PodmanRunner)):
+            result = r.invoke(cli, ["--instances-dir", str(d), "stop", "ghost"])
+        assert result.exit_code != 0
+
+
 class TestBuildInstanceCommand:
     def test_build_calls_build(self, tmp_path):
         _make_instance_dir(tmp_path, "testinst")
