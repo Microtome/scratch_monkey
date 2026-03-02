@@ -108,6 +108,7 @@ class InstanceModel(Atom):
     directory = Str()
     image_built = Bool(False)
     overlay_running = Bool(False)
+    overlay_id = Str("")
     base_image = Str("")
 
     # Config fields
@@ -134,6 +135,7 @@ class InstanceModel(Atom):
         m.directory = str(info.directory)
         m.image_built = info.image_built
         m.overlay_running = info.overlay_running
+        m.overlay_id = info.config.overlay_id
         m.base_image = info.base_image or ""
         cfg = info.config
         m.cmd = cfg.cmd
@@ -238,6 +240,7 @@ class AppModel(Atom):
     selected = Value()
     status_message = Str("")
     busy = Bool(False)
+    _polling = Bool(False)
     available_shared = List(str)
     # PodmanRunner stored as Value so Atom allows non-member attributes
     _runner = Value()
@@ -353,6 +356,46 @@ class AppModel(Atom):
 
         self._run_async("Refreshing...", work, on_success, on_error)
 
+    def poll_status(self) -> None:
+        """Lightweight status poller — updates overlay_running/image_built in-place."""
+        if self.busy or self._polling:
+            return
+        self._polling = True
+
+        # Snapshot what we need on the GUI thread
+        snapshot = [
+            (inst.name, inst.overlay_id or f"{inst.name}-overlay")
+            for inst in self.instances
+        ]
+        runner = self._runner
+
+        def _poll():
+            try:
+                results = {}
+                for name, overlay_name in snapshot:
+                    running = runner.container_running(overlay_name)
+                    built = runner.image_exists(name)
+                    results[name] = (running, built)
+            except Exception:
+                deferred_call(lambda: setattr(self, '_polling', False))
+                return
+
+            def _apply():
+                for inst in self.instances:
+                    pair = results.get(inst.name)
+                    if pair is None:
+                        continue
+                    running, built = pair
+                    if inst.overlay_running != running:
+                        inst.overlay_running = running
+                    if inst.image_built != built:
+                        inst.image_built = built
+                self._polling = False
+
+            deferred_call(_apply)
+
+        threading.Thread(target=_poll, daemon=True).start()
+
     def enter_instance(self, name: str, *, root: bool = False) -> None:
         """Open a terminal running scratch-monkey enter for the named instance."""
         cmd = ["scratch-monkey", "enter", name]
@@ -385,14 +428,17 @@ class AppModel(Atom):
             return overlay_reset(inst, self._runner)
 
         def on_success(removed):
-            self.refresh()
+            for inst in self.instances:
+                if inst.name == name:
+                    inst.overlay_running = False
+                    break
             if removed:
                 self.status_message = f"Overlay container for {name!r} removed."
             else:
                 self.status_message = f"No overlay container found for {name!r}"
 
         def on_error(exc):
-            self.refresh()
+            self.poll_status()
             self.status_message = f"Error: {exc}"
 
         self._run_async(f"Resetting overlay for {name!r}...", work, on_success, on_error)

@@ -33,6 +33,7 @@ def launch(instances_dir: Path) -> None:
         from .views.main_window import ScratchMonkeyWindow
 
     from enaml.qt.qt_application import QtApplication
+    from PyQt6.QtCore import QTimer
     from PyQt6.QtGui import QIcon
 
     app = QtApplication()
@@ -43,7 +44,13 @@ def launch(instances_dir: Path) -> None:
 
     view = ScratchMonkeyWindow(app_model=app_model)
     view.show()
+
+    poll_timer = QTimer()
+    poll_timer.timeout.connect(lambda: app_model.poll_status())
+    poll_timer.start(5000)
+
     app.start()
+    poll_timer.stop()
 
 
 @click.command()

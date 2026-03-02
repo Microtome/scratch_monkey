@@ -64,8 +64,11 @@ enamldef ScratchMonkeyWindow(MainWindow): win:
                     app_model = win.app_model
 
         HGroup: status_bar:
+            align_widths = False
             padding = 0
             trailing_spacer = None
+            minimum_size = (0, 28)
+            maximum_size = (16777215, 28)
             ProgressBar: progress:
                 visible << app_model.busy
                 minimum = 0

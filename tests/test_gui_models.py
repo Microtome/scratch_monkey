@@ -1071,7 +1071,7 @@ class TestRunAsync:
         assert "Deleted" in app.status_message
 
     def test_reset_overlay_async(self, tmp_path):
-        """reset_overlay uses _run_async (sets busy, resets overlay, refreshes)."""
+        """reset_overlay updates overlay_running in-place (no full refresh)."""
         import threading
         from unittest.mock import patch
 
@@ -1079,6 +1079,11 @@ class TestRunAsync:
 
         with patch("scratch_monkey.gui.models.PROJECT_DIR", project_dir):
             app.create_instance("myinst")
+
+        # Pre-set overlay_running to True so we can verify it gets cleared
+        inst = next(i for i in app.instances if i.name == "myinst")
+        inst.overlay_running = True
+        instances_before = app.instances
 
         done = threading.Event()
 
@@ -1095,6 +1100,9 @@ class TestRunAsync:
 
         assert app.busy is False
         assert "removed" in app.status_message
+        # Verify in-place update: same list object, overlay_running cleared
+        assert app.instances is instances_before
+        assert inst.overlay_running is False
 
     def test_refresh_async(self, tmp_path):
         """refresh_async uses _run_async to reload instances."""
@@ -1220,7 +1228,7 @@ class TestRunAsync:
         assert "permission denied" in app.status_message
 
     def test_reset_overlay_error_preserves_message(self, tmp_path):
-        """reset_overlay on_error shows the error message (not overwritten by refresh)."""
+        """reset_overlay on_error calls poll_status (not refresh) and preserves error message."""
         import threading
         from unittest.mock import patch
 
@@ -1230,6 +1238,8 @@ class TestRunAsync:
 
         with patch("scratch_monkey.gui.models.PROJECT_DIR", project_dir):
             app.create_instance("myinst")
+
+        instances_before = app.instances
 
         done = threading.Event()
 
@@ -1246,3 +1256,158 @@ class TestRunAsync:
 
         assert app.busy is False
         assert "podman broke" in app.status_message
+        # Verify instances list was not replaced (poll_status, not refresh)
+        assert app.instances is instances_before
+
+
+class TestPollStatus:
+    """Tests for AppModel.poll_status lightweight status poller."""
+
+    def _make_app(self, tmp_path):
+        from unittest.mock import MagicMock, patch
+
+        instances_dir = tmp_path / "scratch-monkey"
+        instances_dir.mkdir()
+
+        runner = MagicMock()
+        runner.container_exists.return_value = False
+        runner.container_running.return_value = False
+        runner.image_exists.return_value = False
+
+        project_dir = tmp_path / "project"
+        project_dir.mkdir()
+
+        with patch("scratch_monkey.gui.models.PROJECT_DIR", project_dir):
+            app = AppModel(instances_dir=instances_dir, runner=runner)
+
+        return app, instances_dir, project_dir, runner
+
+    def test_poll_status_updates_overlay_running(self, tmp_path):
+        """poll_status updates overlay_running in-place on existing instances."""
+        import threading
+        from unittest.mock import patch
+
+        app, instances_dir, project_dir, runner = self._make_app(tmp_path)
+
+        with patch("scratch_monkey.gui.models.PROJECT_DIR", project_dir):
+            app.create_instance("myinst")
+
+        inst = next(i for i in app.instances if i.name == "myinst")
+        assert inst.overlay_running is False
+        instances_before = app.instances
+
+        runner.container_running.return_value = True
+
+        done = threading.Event()
+
+        def sync_deferred_call(fn):
+            fn()
+            done.set()
+
+        with patch("scratch_monkey.gui.models.deferred_call", side_effect=sync_deferred_call):
+            app.poll_status()
+            done.wait(timeout=2)
+
+        assert inst.overlay_running is True
+        assert app.instances is instances_before
+        assert app._polling is False
+
+    def test_poll_status_updates_image_built(self, tmp_path):
+        """poll_status updates image_built in-place."""
+        import threading
+        from unittest.mock import patch
+
+        app, instances_dir, project_dir, runner = self._make_app(tmp_path)
+
+        with patch("scratch_monkey.gui.models.PROJECT_DIR", project_dir):
+            app.create_instance("myinst")
+
+        inst = next(i for i in app.instances if i.name == "myinst")
+        assert inst.image_built is False
+
+        runner.image_exists.return_value = True
+
+        done = threading.Event()
+
+        def sync_deferred_call(fn):
+            fn()
+            done.set()
+
+        with patch("scratch_monkey.gui.models.deferred_call", side_effect=sync_deferred_call):
+            app.poll_status()
+            done.wait(timeout=2)
+
+        assert inst.image_built is True
+        assert app._polling is False
+
+    def test_poll_status_skips_when_busy(self, tmp_path):
+        """poll_status returns immediately if busy is True."""
+        app, _, _, runner = self._make_app(tmp_path)
+        app.busy = True
+
+        app.poll_status()
+        assert app._polling is False
+        runner.container_running.assert_not_called()
+
+    def test_poll_status_skips_when_already_polling(self, tmp_path):
+        """poll_status returns immediately if _polling is True."""
+        app, _, _, runner = self._make_app(tmp_path)
+        app._polling = True
+
+        app.poll_status()
+        # Should not have spawned a new poll (runner not called again)
+        runner.container_running.assert_not_called()
+
+    def test_poll_status_preserves_dirty_state(self, tmp_path):
+        """poll_status does not affect dirty flag on instances."""
+        import threading
+        from unittest.mock import patch
+
+        app, instances_dir, project_dir, runner = self._make_app(tmp_path)
+
+        with patch("scratch_monkey.gui.models.PROJECT_DIR", project_dir):
+            app.create_instance("myinst")
+
+        inst = next(i for i in app.instances if i.name == "myinst")
+        inst.cmd = "changed"
+        inst.check_dirty()
+        assert inst.dirty is True
+
+        runner.container_running.return_value = True
+
+        done = threading.Event()
+
+        def sync_deferred_call(fn):
+            fn()
+            done.set()
+
+        with patch("scratch_monkey.gui.models.deferred_call", side_effect=sync_deferred_call):
+            app.poll_status()
+            done.wait(timeout=2)
+
+        assert inst.dirty is True
+        assert inst.overlay_running is True
+
+    def test_poll_status_handles_error(self, tmp_path):
+        """poll_status clears _polling on exception without crashing."""
+        import threading
+        from unittest.mock import patch
+
+        app, instances_dir, project_dir, runner = self._make_app(tmp_path)
+
+        with patch("scratch_monkey.gui.models.PROJECT_DIR", project_dir):
+            app.create_instance("myinst")
+
+        runner.container_running.side_effect = RuntimeError("podman down")
+
+        done = threading.Event()
+
+        def sync_deferred_call(fn):
+            fn()
+            done.set()
+
+        with patch("scratch_monkey.gui.models.deferred_call", side_effect=sync_deferred_call):
+            app.poll_status()
+            done.wait(timeout=2)
+
+        assert app._polling is False
