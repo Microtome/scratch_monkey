@@ -1,5 +1,10 @@
 """Instance detail panel for scratch-monkey GUI."""
 
+import enaml
+with enaml.imports():
+    from enaml.stdlib.message_box import question
+from enaml.stdlib.dialog_buttons import DialogButton
+
 from enaml.widgets.api import (
     Container, Dialog, Field, Label, PushButton, GroupBox, VGroup, HGroup, ScrollArea
 )
@@ -123,7 +128,14 @@ enamldef InstanceDetailPanel(Container): panel:
                                     text = "Reset Overlay"
                                     enabled << not app_model.busy
                                     clicked ::
-                                        app_model.reset_overlay(app_model.selected_instance)
+                                        result = question(
+                                            panel,
+                                            "Reset Overlay",
+                                            f"Remove the overlay container for '{app_model.selected_instance}' and discard all changes?",
+                                            [DialogButton('Reset', 'accept'), DialogButton('Cancel', 'reject')],
+                                        )
+                                        if result is not None and result.action == 'accept':
+                                            app_model.reset_overlay(app_model.selected_instance)
                                     tool_tip = "Remove the overlay container and discard its changes"
 
                             HGroup:
