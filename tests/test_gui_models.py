@@ -1103,6 +1103,84 @@ class TestRunAsync:
         assert app.instances is instances_before
         assert inst.overlay_running is False
 
+    def test_stop_instance(self, tmp_path):
+        """stop_instance stops the overlay container and clears overlay_running."""
+        import threading
+        from unittest.mock import patch
+
+        app, instances_dir, project_dir = self._make_app(tmp_path)
+
+        with patch("scratch_monkey.gui.models.PROJECT_DIR", project_dir):
+            app.create_instance("myinst")
+
+        inst = next(i for i in app.instances if i.name == "myinst")
+        inst.overlay_running = True
+        instances_before = app.instances
+
+        done = threading.Event()
+
+        def sync_deferred_call(fn):
+            fn()
+            done.set()
+
+        with patch("scratch_monkey.gui.models.deferred_call", side_effect=sync_deferred_call):
+            app.stop_instance("myinst")
+            done.wait(timeout=2)
+
+        assert app.busy is False
+        assert "Stopped" in app.status_message
+        assert app.instances is instances_before
+        assert inst.overlay_running is False
+
+    def test_stop_instance_not_found(self, tmp_path):
+        """stop_instance sets error status for nonexistent instance."""
+        app, _, _ = self._make_app(tmp_path)
+
+        app.stop_instance("nonexistent")
+        assert app.busy is False
+        assert "not found" in app.status_message
+
+    def test_start_instance(self, tmp_path):
+        """start_instance calls ensure_running and sets overlay_running."""
+        import threading
+        from unittest.mock import patch
+
+        app, instances_dir, project_dir = self._make_app(tmp_path)
+
+        with patch("scratch_monkey.gui.models.PROJECT_DIR", project_dir):
+            app.create_instance("myinst")
+
+        inst = next(i for i in app.instances if i.name == "myinst")
+        assert inst.overlay_running is False
+        instances_before = app.instances
+
+        done = threading.Event()
+
+        def sync_deferred_call(fn):
+            fn()
+            done.set()
+
+        with (
+            patch("scratch_monkey.gui.models.deferred_call", side_effect=sync_deferred_call),
+            patch("scratch_monkey.gui.models.overlay_ensure_running") as mock_ensure,
+        ):
+            app.start_instance("myinst")
+            done.wait(timeout=2)
+
+        mock_ensure.assert_called_once()
+        assert app.busy is False
+        assert "Started" in app.status_message
+        assert app.instances is instances_before
+        assert inst.overlay_running is True
+
+    def test_start_instance_not_found(self, tmp_path):
+        """start_instance sets error status for nonexistent instance."""
+        app, _, _ = self._make_app(tmp_path)
+
+        app.start_instance("nonexistent")
+        assert app.busy is False
+        assert "not found" in app.status_message
+
     def test_refresh_async(self, tmp_path):
         """refresh_async uses _run_async to reload instances."""
         import threading

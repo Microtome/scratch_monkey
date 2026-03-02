@@ -25,7 +25,19 @@ from ..config import ConfigError, InstanceConfig, save
 from ..container import PodmanError, PodmanRunner
 from ..export import ExportError
 from ..export import export_command as export_command_fn
-from ..instance import Instance, InstanceError, InstanceInfo, clone, create, delete, list_all, rename, skel_copy
+from ..instance import (
+    Instance,
+    InstanceError,
+    InstanceInfo,
+    clone,
+    create,
+    delete,
+    detect_base_image,
+    list_all,
+    rename,
+    skel_copy,
+)
+from ..overlay import ensure_running as overlay_ensure_running
 from ..overlay import reset as overlay_reset
 from ..run_args import DEFAULT_BASE_IMAGE, FEDORA_IMAGE, PROJECT_DIR
 from ..shared import list_shared, parse_shared_entry
@@ -445,6 +457,60 @@ class AppModel(Atom):
             self.status_message = err
         else:
             self.status_message = f"Building {name!r} in terminal..."
+
+    def start_instance(self, name: str) -> None:
+        """Start (or create) the overlay container for the named instance."""
+        instances_dir = Path(self.instances_dir)
+        inst_dir = instances_dir / name
+        if not inst_dir.is_dir():
+            self.status_message = f"Instance {name!r} not found"
+            return
+        inst = Instance.from_directory(inst_dir)
+        # Determine image: per-instance build or base image
+        if self._runner.image_exists(name):
+            image = name
+        else:
+            image = detect_base_image(inst_dir) or DEFAULT_BASE_IMAGE
+
+        def work():
+            overlay_ensure_running(inst, self._runner, image)
+
+        def on_success(_result):
+            for m in self.instances:
+                if m.name == name:
+                    m.overlay_running = True
+                    break
+            self.status_message = f"Started {name!r}"
+
+        def on_error(exc):
+            self.poll_status()
+            self.status_message = f"Error starting {name!r}: {exc}"
+
+        self._run_async(f"Starting {name!r}...", work, on_success, on_error)
+
+    def stop_instance(self, name: str) -> None:
+        """Stop the overlay container for the named instance."""
+        inst_model = next((i for i in self.instances if i.name == name), None)
+        if inst_model is None:
+            self.status_message = f"Instance {name!r} not found"
+            return
+        overlay_name = inst_model.overlay_id or f"{name}-overlay"
+
+        def work():
+            self._runner.stop(overlay_name)
+
+        def on_success(_result):
+            for inst in self.instances:
+                if inst.name == name:
+                    inst.overlay_running = False
+                    break
+            self.status_message = f"Stopped {name!r}"
+
+        def on_error(exc):
+            self.poll_status()
+            self.status_message = f"Error stopping {name!r}: {exc}"
+
+        self._run_async(f"Stopping {name!r}...", work, on_success, on_error)
 
     def reset_overlay(self, name: str) -> None:
         """Remove the overlay container for the named instance."""

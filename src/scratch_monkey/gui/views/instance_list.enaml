@@ -108,12 +108,19 @@ enamldef InstanceListPanel(Container): panel:
                     align_widths = False
                     padding = 0
                     spacing = 2
-                    Label:
+                    PushButton:
+                        checkable = True
+                        checked << inst.overlay_running
                         text = "\u25CF"
                         style_class << ("status-running" if inst.overlay_running else "status-stopped")
-                        tool_tip << ("Running" if inst.overlay_running else "Built" if inst.image_built else "No image")
-                        minimum_size = (16, 0)
-                        maximum_size = (16, 16777215)
+                        tool_tip << ("Running — click to stop" if inst.overlay_running else "Stopped")
+                        minimum_size = (24, 0)
+                        maximum_size = (24, 16777215)
+                        toggled ::
+                            if checked and not inst.overlay_running:
+                                app_model.start_instance(inst.name)
+                            elif not checked and inst.overlay_running:
+                                app_model.stop_instance(inst.name)
                     Label:
                         text << ("F" if "fedora" in (inst.base_image or "").lower() else "\u2013")
                         tool_tip << (inst.base_image if inst.base_image and "fedora" in inst.base_image.lower() else "Scratch")
