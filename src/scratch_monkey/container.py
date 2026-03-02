@@ -97,7 +97,7 @@ class PodmanRunner:
 
     def exec_interactive(self, container: str, exec_args: list[str]) -> None:
         """Run an interactive `podman exec` (no capture, for TTY use)."""
-        self._run(["exec", container, *exec_args], capture=False)
+        self._run(["exec", "-it", container, *exec_args], capture=False)
 
     def exec_capture(
         self, container: str, exec_args: list[str], *, user: str | None = None, input: str | None = None,

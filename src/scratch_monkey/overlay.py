@@ -116,7 +116,6 @@ def exec_shell(
 
     if root:
         exec_args = [
-            "-it",
             "--user", "root",
             "--workdir", "/root",
             "-e", "HOME=/root",
@@ -126,7 +125,6 @@ def exec_shell(
         ]
     else:
         exec_args = [
-            "-it",
             "--user", user,
             "--workdir", container_home,
             "-e", f"HOME={container_home}",
