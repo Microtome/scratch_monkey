@@ -105,28 +105,24 @@ enamldef InstanceDetailPanel(Container): panel:
                             HGroup:
                                 PushButton:
                                     text = "Enter"
-                                    enabled << not app_model.busy
                                     clicked ::
                                         app_model.enter_instance(app_model.selected_instance)
                                     tool_tip = "Open a shell in this instance"
 
                                 PushButton:
                                     text = "Enter as Root"
-                                    enabled << not app_model.busy
                                     clicked ::
                                         app_model.enter_instance(app_model.selected_instance, root=True)
                                     tool_tip = "Open a root shell in this instance"
 
                                 PushButton:
                                     text = "Build"
-                                    enabled << not app_model.busy
                                     clicked ::
                                         app_model.build_instance(app_model.selected_instance)
                                     tool_tip = "Build the container image for this instance"
 
                                 PushButton:
                                     text = "Reset Overlay"
-                                    enabled << not app_model.busy
                                     clicked ::
                                         result = question(
                                             panel,
@@ -141,7 +137,6 @@ enamldef InstanceDetailPanel(Container): panel:
                             HGroup:
                                 PushButton:
                                     text = "Export Cmd"
-                                    enabled << not app_model.busy
                                     clicked ::
                                         from scratch_monkey.gui.views.instance_detail import ExportDialog
                                         dlg = ExportDialog(panel, app_model=app_model, instance_name=app_model.selected_instance)
@@ -150,21 +145,18 @@ enamldef InstanceDetailPanel(Container): panel:
 
                                 PushButton:
                                     text = "Edit Dockerfile"
-                                    enabled << not app_model.busy
                                     clicked ::
                                         app_model.edit_file(app_model.selected_instance, "dockerfile")
                                     tool_tip = "Open the Dockerfile in your editor ($VISUAL/$EDITOR)"
 
                                 PushButton:
                                     text = "Edit .env"
-                                    enabled << not app_model.busy
                                     clicked ::
                                         app_model.edit_file(app_model.selected_instance, "env")
                                     tool_tip = "Open the .env file in your editor ($VISUAL/$EDITOR)"
 
                                 PushButton:
                                     text = "Edit Config"
-                                    enabled << not app_model.busy
                                     clicked ::
                                         app_model.edit_config(app_model.selected_instance)
                                     tool_tip = "Edit scratch.toml in your editor; config reloads when editor closes"

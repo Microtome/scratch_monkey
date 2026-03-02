@@ -139,7 +139,6 @@ enamldef InstanceListPanel(Container): panel:
 
                     PushButton:
                         text = "\u29C9"
-                        enabled << not app_model.busy
                         minimum_size = (30, 0)
                         maximum_size = (30, 16777215)
                         tool_tip = "Clone this instance"
@@ -149,7 +148,6 @@ enamldef InstanceListPanel(Container): panel:
 
                     PushButton:
                         text = "\u270E"
-                        enabled << not app_model.busy
                         minimum_size = (30, 0)
                         maximum_size = (30, 16777215)
                         tool_tip = "Rename this instance"
@@ -159,7 +157,6 @@ enamldef InstanceListPanel(Container): panel:
 
                     PushButton:
                         text = "\u2717"
-                        enabled << not app_model.busy
                         minimum_size = (30, 0)
                         maximum_size = (30, 16777215)
                         tool_tip = "Delete this instance"
@@ -175,7 +172,6 @@ enamldef InstanceListPanel(Container): panel:
 
     PushButton: new_btn:
         text = "+ New Instance"
-        enabled << not app_model.busy
         clicked ::
             dlg = CreateInstanceDialog(panel, app_model=app_model, instance_model=app_model.new_instance_model())
             dlg.exec_()

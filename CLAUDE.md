@@ -260,3 +260,8 @@ All podman calls go through `PodmanRunner` in `container.py`. Tests mock at this
 - **Fedora detection**: use `is_fedora_based(instance_dir)` which reads the **last** FROM line
 - **Overlay user setup**: only runs for fedora instances; scratch instances skip entirely
 - **Instance name validation**: always call `validate_name()` before creating/cloning
+- **Always clean up downstream impacts**: when a change makes existing code redundant or obsolete, remove or update that code in the same changeset
+
+### GUI / Enaml References
+
+- **`UI_LAYOUT.md`**: Enaml layout gotchas and patterns — read before modifying GUI layout code

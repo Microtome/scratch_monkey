@@ -53,6 +53,7 @@ enamldef ScratchMonkeyWindow(MainWindow): win:
         ]
 
         Splitter: splitter:
+            enabled << not app_model.busy
             SplitItem:
                 stretch = 0
                 InstanceListPanel:
