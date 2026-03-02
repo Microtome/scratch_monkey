@@ -16,12 +16,16 @@ except ImportError:
         "Install it with: uv tool install 'scratch-monkey[gui]'"
     )
 
+try:
+    from enaml.application import deferred_call
+except ImportError:
+    def deferred_call(fn): fn()  # fallback for tests without enaml app
+
 from ..config import ConfigError, InstanceConfig, save
 from ..container import PodmanError, PodmanRunner
 from ..export import ExportError
 from ..export import export_command as export_command_fn
 from ..instance import Instance, InstanceError, InstanceInfo, clone, create, delete, list_all, rename, skel_copy
-from ..overlay import OverlayError
 from ..overlay import reset as overlay_reset
 from ..run_args import DEFAULT_BASE_IMAGE, FEDORA_IMAGE, PROJECT_DIR
 from ..shared import list_shared, parse_shared_entry
@@ -233,6 +237,7 @@ class AppModel(Atom):
     # Using Value() (not @property) so Enaml bindings re-fire when it changes.
     selected = Value()
     status_message = Str("")
+    busy = Bool(False)
     available_shared = List(str)
     # PodmanRunner stored as Value so Atom allows non-member attributes
     _runner = Value()
@@ -257,6 +262,43 @@ class AppModel(Atom):
         self.selected = next((i for i in self.instances if i.name == self.selected_instance), None)
         if self.selected:
             self.init_shared_entries(self.selected)
+
+    # ── async helper ──────────────────────────────────────────────────────────
+
+    def _run_async(self, status: str, work, on_success=None, on_error=None) -> None:
+        """Run work() in a background thread with busy indicator.
+
+        Args:
+            status: Status message shown while working.
+            work: Callable that does the blocking work. Called in a daemon thread.
+            on_success: Optional callback(result) called on the GUI thread after work completes.
+            on_error: Optional callback(exception) called on the GUI thread if work raises.
+        """
+        if self.busy:
+            return
+        self.busy = True
+        self.status_message = status
+
+        def _thread():
+            try:
+                result = work()
+            except Exception as exc:
+                _exc = exc
+                def _on_err(e=_exc):
+                    self.busy = False
+                    if on_error:
+                        on_error(e)
+                    else:
+                        self.status_message = f"Error: {e}"
+                deferred_call(_on_err)
+            else:
+                def _on_ok():
+                    self.busy = False
+                    if on_success:
+                        on_success(result)
+                deferred_call(_on_ok)
+
+        threading.Thread(target=_thread, daemon=True).start()
 
     # ── actions ───────────────────────────────────────────────────────────────
 
@@ -292,7 +334,24 @@ class AppModel(Atom):
         except (InstanceError, PodmanError, ConfigError) as e:
             self.status_message = f"Error loading instances: {e}"
 
-    # ── actions ──────────────────────────────────────────────────────────────
+    def refresh_async(self) -> None:
+        """Reload all instances from disk in a background thread."""
+        def work():
+            instances_dir = Path(self.instances_dir)
+            infos = list_all(instances_dir, self._runner)
+            avail = [v.name for v in list_shared(instances_dir)]
+            return infos, avail
+
+        def on_success(result):
+            infos, avail = result
+            self.available_shared = avail
+            self.instances = [InstanceModel.from_info(i) for i in infos]
+            self.status_message = f"Loaded {len(self.instances)} instance(s)"
+
+        def on_error(exc):
+            self.status_message = f"Error loading instances: {exc}"
+
+        self._run_async("Refreshing...", work, on_success, on_error)
 
     def enter_instance(self, name: str, *, root: bool = False) -> None:
         """Open a terminal running scratch-monkey enter for the named instance."""
@@ -321,25 +380,44 @@ class AppModel(Atom):
             self.status_message = f"Instance {name!r} not found"
             return
         inst = Instance.from_directory(inst_dir)
-        try:
-            removed = overlay_reset(inst, self._runner)
+
+        def work():
+            return overlay_reset(inst, self._runner)
+
+        def on_success(removed):
+            self.refresh()
             if removed:
                 self.status_message = f"Overlay container for {name!r} removed."
             else:
                 self.status_message = f"No overlay container found for {name!r}"
-        except (InstanceError, PodmanError, OverlayError) as e:
-            self.status_message = f"Error: {e}"
-        self.refresh()
+
+        def on_error(exc):
+            self.refresh()
+            self.status_message = f"Error: {exc}"
+
+        self._run_async(f"Resetting overlay for {name!r}...", work, on_success, on_error)
 
     def delete_instance(self, name: str) -> None:
         """Delete the named instance (no confirmation — caller must confirm)."""
-        try:
+        def work():
             delete(name, Path(self.instances_dir), self._runner)
-            self.status_message = f"Deleted {name!r}"
+            instances_dir = Path(self.instances_dir)
+            infos = list_all(instances_dir, self._runner)
+            avail = [v.name for v in list_shared(instances_dir)]
+            return infos, avail
+
+        def on_success(result):
+            infos, avail = result
+            self.available_shared = avail
+            self.instances = [InstanceModel.from_info(i) for i in infos]
             self.selected_instance = ""
-        except (InstanceError, PodmanError) as e:
-            self.status_message = f"Error: {e}"
-        self.refresh()
+            self.status_message = f"Deleted {name!r}"
+
+        def on_error(exc):
+            self.refresh()
+            self.status_message = f"Error: {exc}"
+
+        self._run_async(f"Deleting {name!r}...", work, on_success, on_error)
 
     def rename_instance(self, old_name: str, new_name: str) -> str:
         """Rename an instance. Returns '' on success or error string."""
@@ -420,7 +498,6 @@ class AppModel(Atom):
 
         def _wait_and_refresh():
             proc.wait()
-            from enaml.application import deferred_call
 
             def _update():
                 self.refresh()

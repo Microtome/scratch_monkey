@@ -939,3 +939,310 @@ class TestAppModelEditFile:
             app.edit_file("myinst", "dockerfile")
 
         assert "No terminal emulator found." in app.status_message
+
+
+class TestRunAsync:
+    """Tests for AppModel._run_async background task helper."""
+
+    def _make_app(self, tmp_path):
+        from unittest.mock import MagicMock, patch
+
+        instances_dir = tmp_path / "scratch-monkey"
+        instances_dir.mkdir()
+
+        runner = MagicMock()
+        runner.container_exists.return_value = False
+        runner.container_running.return_value = False
+        runner.image_exists.return_value = False
+
+        project_dir = tmp_path / "project"
+        project_dir.mkdir()
+
+        with patch("scratch_monkey.gui.models.PROJECT_DIR", project_dir):
+            app = AppModel(instances_dir=instances_dir, runner=runner)
+
+        return app, instances_dir, project_dir
+
+    def test_run_async_sets_busy_and_calls_on_success(self, tmp_path):
+        """_run_async sets busy=True, runs work, then calls on_success with result."""
+        import threading
+        from unittest.mock import patch
+
+        app, _, project_dir = self._make_app(tmp_path)
+
+        # Replace deferred_call with synchronous execution for testing
+        with patch("scratch_monkey.gui.models.deferred_call", side_effect=lambda fn: fn()):
+            results = []
+            done = threading.Event()
+
+            def work():
+                return 42
+
+            def on_success(result):
+                results.append(result)
+                done.set()
+
+            app._run_async("Working...", work, on_success)
+            done.wait(timeout=2)
+
+        assert results == [42]
+        assert app.busy is False
+
+    def test_run_async_calls_on_error(self, tmp_path):
+        """_run_async calls on_error when work() raises."""
+        import threading
+        from unittest.mock import patch
+
+        app, _, project_dir = self._make_app(tmp_path)
+
+        with patch("scratch_monkey.gui.models.deferred_call", side_effect=lambda fn: fn()):
+            errors = []
+            done = threading.Event()
+
+            def work():
+                raise RuntimeError("boom")
+
+            def on_error(exc):
+                errors.append(str(exc))
+                done.set()
+
+            app._run_async("Working...", work, on_error=on_error)
+            done.wait(timeout=2)
+
+        assert errors == ["boom"]
+        assert app.busy is False
+
+    def test_run_async_default_error_sets_status(self, tmp_path):
+        """Without on_error, _run_async sets status_message to error string."""
+        import threading
+        from unittest.mock import patch
+
+        app, _, project_dir = self._make_app(tmp_path)
+        done = threading.Event()
+
+        def sync_deferred_call(fn):
+            fn()
+            done.set()
+
+        with patch("scratch_monkey.gui.models.deferred_call", side_effect=sync_deferred_call):
+            def work():
+                raise RuntimeError("something broke")
+
+            app._run_async("Working...", work)
+            done.wait(timeout=2)
+
+        assert "something broke" in app.status_message
+        assert app.busy is False
+
+    def test_run_async_reentrant_guard(self, tmp_path):
+        """_run_async returns immediately if already busy."""
+        app, _, project_dir = self._make_app(tmp_path)
+        app.busy = True
+
+        called = []
+        app._run_async("Working...", lambda: called.append(1))
+        assert called == []
+
+    def test_delete_instance_async(self, tmp_path):
+        """delete_instance uses _run_async (sets busy, calls delete, refreshes)."""
+        import threading
+        from unittest.mock import patch
+
+        app, instances_dir, project_dir = self._make_app(tmp_path)
+
+        with patch("scratch_monkey.gui.models.PROJECT_DIR", project_dir):
+            app.create_instance("todelete")
+
+        assert any(i.name == "todelete" for i in app.instances)
+        app.selected_instance = "todelete"
+
+        done = threading.Event()
+
+        def sync_deferred_call(fn):
+            fn()
+            done.set()
+
+        with patch("scratch_monkey.gui.models.deferred_call", side_effect=sync_deferred_call):
+            app.delete_instance("todelete")
+            done.wait(timeout=2)
+
+        assert app.busy is False
+        assert app.selected_instance == ""
+        assert "Deleted" in app.status_message
+
+    def test_reset_overlay_async(self, tmp_path):
+        """reset_overlay uses _run_async (sets busy, resets overlay, refreshes)."""
+        import threading
+        from unittest.mock import patch
+
+        app, instances_dir, project_dir = self._make_app(tmp_path)
+
+        with patch("scratch_monkey.gui.models.PROJECT_DIR", project_dir):
+            app.create_instance("myinst")
+
+        done = threading.Event()
+
+        def sync_deferred_call(fn):
+            fn()
+            done.set()
+
+        with (
+            patch("scratch_monkey.gui.models.deferred_call", side_effect=sync_deferred_call),
+            patch("scratch_monkey.gui.models.overlay_reset", return_value=True),
+        ):
+            app.reset_overlay("myinst")
+            done.wait(timeout=2)
+
+        assert app.busy is False
+        assert "removed" in app.status_message
+
+    def test_refresh_async(self, tmp_path):
+        """refresh_async uses _run_async to reload instances."""
+        import threading
+        from unittest.mock import patch
+
+        app, instances_dir, project_dir = self._make_app(tmp_path)
+
+        done = threading.Event()
+
+        def sync_deferred_call(fn):
+            fn()
+            done.set()
+
+        with patch("scratch_monkey.gui.models.deferred_call", side_effect=sync_deferred_call):
+            app.refresh_async()
+            done.wait(timeout=2)
+
+        assert app.busy is False
+        assert "Loaded" in app.status_message
+
+    def test_run_async_sets_status_message_immediately(self, tmp_path):
+        """_run_async sets status_message to the status param before the thread runs."""
+        import threading
+        from unittest.mock import patch
+
+        app, _, project_dir = self._make_app(tmp_path)
+        observed_status = []
+        gate = threading.Event()
+
+        def work():
+            observed_status.append(app.status_message)
+            gate.set()
+            return None
+
+        with patch("scratch_monkey.gui.models.deferred_call", side_effect=lambda fn: fn()):
+            app._run_async("Processing...", work, on_success=lambda r: None)
+            gate.wait(timeout=2)
+
+        assert observed_status == ["Processing..."]
+
+    def test_run_async_busy_true_during_work(self, tmp_path):
+        """_run_async keeps busy=True while work() is running."""
+        import threading
+        from unittest.mock import patch
+
+        app, _, project_dir = self._make_app(tmp_path)
+        observed_busy = []
+        gate = threading.Event()
+
+        def work():
+            observed_busy.append(app.busy)
+            gate.set()
+            return None
+
+        with patch("scratch_monkey.gui.models.deferred_call", side_effect=lambda fn: fn()):
+            app._run_async("Working...", work, on_success=lambda r: None)
+            gate.wait(timeout=2)
+
+        assert observed_busy == [True]
+        assert app.busy is False
+
+    def test_reset_overlay_not_found(self, tmp_path):
+        """reset_overlay returns early without setting busy for nonexistent instance."""
+        app, _, project_dir = self._make_app(tmp_path)
+
+        app.reset_overlay("nonexistent")
+        assert app.busy is False
+        assert "not found" in app.status_message
+
+    def test_reset_overlay_no_container(self, tmp_path):
+        """reset_overlay reports when no overlay container exists."""
+        import threading
+        from unittest.mock import patch
+
+        app, instances_dir, project_dir = self._make_app(tmp_path)
+
+        with patch("scratch_monkey.gui.models.PROJECT_DIR", project_dir):
+            app.create_instance("myinst")
+
+        done = threading.Event()
+
+        def sync_deferred_call(fn):
+            fn()
+            done.set()
+
+        with (
+            patch("scratch_monkey.gui.models.deferred_call", side_effect=sync_deferred_call),
+            patch("scratch_monkey.gui.models.overlay_reset", return_value=False),
+        ):
+            app.reset_overlay("myinst")
+            done.wait(timeout=2)
+
+        assert app.busy is False
+        assert "No overlay container found" in app.status_message
+
+    def test_delete_instance_error_preserves_message(self, tmp_path):
+        """delete_instance on_error shows the error message (not overwritten by refresh)."""
+        import threading
+        from unittest.mock import patch
+
+        from scratch_monkey.instance import InstanceError
+
+        app, instances_dir, project_dir = self._make_app(tmp_path)
+
+        with patch("scratch_monkey.gui.models.PROJECT_DIR", project_dir):
+            app.create_instance("myinst")
+
+        done = threading.Event()
+
+        def sync_deferred_call(fn):
+            fn()
+            done.set()
+
+        with (
+            patch("scratch_monkey.gui.models.deferred_call", side_effect=sync_deferred_call),
+            patch("scratch_monkey.gui.models.delete", side_effect=InstanceError("permission denied")),
+        ):
+            app.delete_instance("myinst")
+            done.wait(timeout=2)
+
+        assert app.busy is False
+        assert "permission denied" in app.status_message
+
+    def test_reset_overlay_error_preserves_message(self, tmp_path):
+        """reset_overlay on_error shows the error message (not overwritten by refresh)."""
+        import threading
+        from unittest.mock import patch
+
+        from scratch_monkey.container import PodmanError
+
+        app, instances_dir, project_dir = self._make_app(tmp_path)
+
+        with patch("scratch_monkey.gui.models.PROJECT_DIR", project_dir):
+            app.create_instance("myinst")
+
+        done = threading.Event()
+
+        def sync_deferred_call(fn):
+            fn()
+            done.set()
+
+        with (
+            patch("scratch_monkey.gui.models.deferred_call", side_effect=sync_deferred_call),
+            patch("scratch_monkey.gui.models.overlay_reset", side_effect=PodmanError("podman broke")),
+        ):
+            app.reset_overlay("myinst")
+            done.wait(timeout=2)
+
+        assert app.busy is False
+        assert "podman broke" in app.status_message
