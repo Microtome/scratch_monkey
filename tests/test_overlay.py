@@ -216,28 +216,30 @@ class TestExecShell:
         mock_runner.exec_interactive.assert_called_once()
         call_args = mock_runner.exec_interactive.call_args
         container = call_args[0][0]
-        exec_args = call_args[0][1]
+        cmd_args = call_args[0][1]
+        options = call_args[1].get("options", [])
         assert container == "myinstance-overlay"
-        assert "--user" in exec_args
-        assert "testuser" in exec_args
-        # container_name should NOT be in exec_args (passed as separate param)
-        assert "myinstance-overlay" not in exec_args
+        assert "--user" in options
+        assert "testuser" in options
+        # container_name should NOT be in options (passed as separate param)
+        assert "myinstance-overlay" not in options
+        assert "myinstance-overlay" not in cmd_args
 
     def test_exec_as_root(self, scratch_instance, mock_runner):
         exec_shell(scratch_instance, mock_runner, "myinstance-overlay", root=True)
         call_args = mock_runner.exec_interactive.call_args
         container = call_args[0][0]
-        exec_args = call_args[0][1]
+        options = call_args[1].get("options", [])
         assert container == "myinstance-overlay"
-        assert "--user" in exec_args
-        user_idx = exec_args.index("--user")
-        assert exec_args[user_idx + 1] == "root"
-        assert "/root" in exec_args
+        assert "--user" in options
+        user_idx = options.index("--user")
+        assert options[user_idx + 1] == "root"
+        assert "/root" in options
 
     def test_passes_cmd(self, scratch_instance, mock_runner):
         exec_shell(scratch_instance, mock_runner, "myinstance-overlay", cmd="/bin/zsh")
-        exec_args = mock_runner.exec_interactive.call_args[0][1]
-        assert "/bin/zsh" in exec_args
+        cmd_args = mock_runner.exec_interactive.call_args[0][1]
+        assert "/bin/zsh" in cmd_args
 
 
 # ─── reset ────────────────────────────────────────────────────────────────────

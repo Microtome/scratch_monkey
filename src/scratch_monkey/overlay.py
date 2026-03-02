@@ -115,25 +115,23 @@ def exec_shell(
     container_home = f"/home/{user}"
 
     if root:
-        exec_args = [
+        options = [
             "--user", "root",
             "--workdir", "/root",
             "-e", "HOME=/root",
             "-e", "USER=root",
             "-e", f"SCRATCH_INSTANCE={instance.name}",
-            cmd,
         ]
     else:
-        exec_args = [
+        options = [
             "--user", user,
             "--workdir", container_home,
             "-e", f"HOME={container_home}",
             "-e", f"USER={user}",
             "-e", f"SCRATCH_INSTANCE={instance.name}",
-            cmd,
         ]
 
-    runner.exec_interactive(container_name, exec_args)
+    runner.exec_interactive(container_name, [cmd], options=options)
 
 
 def reset(instance: Instance, runner: PodmanRunner) -> bool:

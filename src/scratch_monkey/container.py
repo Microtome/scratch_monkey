@@ -95,9 +95,14 @@ class PodmanRunner:
         """Run `podman exec <container> <exec_args>` and return the result."""
         return self._run(["exec", container, *exec_args], capture=False)
 
-    def exec_interactive(self, container: str, exec_args: list[str]) -> None:
-        """Run an interactive `podman exec` (no capture, for TTY use)."""
-        self._run(["exec", "-it", container, *exec_args], capture=False)
+    def exec_interactive(self, container: str, exec_args: list[str], *, options: list[str] | None = None) -> None:
+        """Run an interactive `podman exec` (no capture, for TTY use).
+
+        Options (--user, --workdir, -e, etc.) go before the container name.
+        exec_args is the command to run inside the container.
+        """
+        opts = options or []
+        self._run(["exec", "-it", *opts, container, *exec_args], capture=False)
 
     def exec_capture(
         self, container: str, exec_args: list[str], *, user: str | None = None, input: str | None = None,
