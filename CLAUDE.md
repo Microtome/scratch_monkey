@@ -201,7 +201,7 @@ docs: document overlay mode in README
 - **Build**: hatchling (`pyproject.toml`)
 - **CLI**: Click
 - **GUI**: Enaml + Qt6 (optional dep)
-- **Tests**: pytest (135 tests, no real podman required)
+- **Tests**: pytest (368 tests, no real podman required)
 - **Lint/format**: ruff
 
 ### Key Commands
