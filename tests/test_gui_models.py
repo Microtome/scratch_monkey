@@ -19,7 +19,7 @@ class TestVolumeMountEntry:
         e = VolumeMountEntry.from_spec("/host:/container")
         assert e.host_path == "/host"
         assert e.container_path == "/container"
-        assert e.mode == "rw"
+        assert e.mode == "ro"
 
     def test_from_spec_with_mode(self):
         e = VolumeMountEntry.from_spec("/host:/container:ro")
@@ -27,23 +27,22 @@ class TestVolumeMountEntry:
         assert e.container_path == "/container"
         assert e.mode == "ro"
 
-    def test_to_spec_rw_omits_mode(self):
-        e = VolumeMountEntry(host_path="/a", container_path="/b", mode="rw")
-        assert e.to_spec() == "/a:/b"
-
-    def test_to_spec_ro_includes_mode(self):
+    def test_to_spec_always_includes_mode_ro(self):
         e = VolumeMountEntry(host_path="/a", container_path="/b", mode="ro")
         assert e.to_spec() == "/a:/b:ro"
 
-    def test_round_trip(self):
-        original = "/data:/mnt/data:ro"
+    def test_to_spec_always_includes_mode_rw(self):
+        e = VolumeMountEntry(host_path="/a", container_path="/b", mode="rw")
+        assert e.to_spec() == "/a:/b:rw"
+
+    def test_round_trip_explicit_rw(self):
+        original = "/data:/mnt/data:rw"
         e = VolumeMountEntry.from_spec(original)
         assert e.to_spec() == original
 
-    def test_round_trip_rw(self):
-        original = "/data:/mnt/data"
-        e = VolumeMountEntry.from_spec(original)
-        assert e.to_spec() == original
+    def test_round_trip_no_suffix_outputs_ro(self):
+        e = VolumeMountEntry.from_spec("/data:/mnt/data")
+        assert e.to_spec() == "/data:/mnt/data:ro"
 
 
 class TestInstanceModelBaseImage:
@@ -141,7 +140,7 @@ class TestInstanceModelVolumes:
             VolumeMountEntry(host_path="/c", container_path="/d", mode="ro"),
         ]
         cfg = m.to_config()
-        assert cfg.volumes == ["/a:/b", "/c:/d:ro"]
+        assert cfg.volumes == ["/a:/b:rw", "/c:/d:ro"]
 
     def test_to_config_serializes_shared_entries(self):
         m = InstanceModel()
@@ -1258,6 +1257,81 @@ class TestRunAsync:
         assert "podman broke" in app.status_message
         # Verify instances list was not replaced (poll_status, not refresh)
         assert app.instances is instances_before
+
+
+class TestDirectoryHelpers:
+    """Tests for _open_file_manager, _open_terminal_at, and AppModel methods."""
+
+    def _make_app(self, tmp_path):
+        from unittest.mock import MagicMock, patch
+
+        instances_dir = tmp_path / "scratch-monkey"
+        instances_dir.mkdir()
+
+        runner = MagicMock()
+        runner.container_exists.return_value = False
+        runner.container_running.return_value = False
+        runner.image_exists.return_value = False
+
+        project_dir = tmp_path / "project"
+        project_dir.mkdir()
+
+        with patch("scratch_monkey.gui.models.PROJECT_DIR", project_dir):
+            app = AppModel(instances_dir=instances_dir, runner=runner)
+
+        return app
+
+    def test_open_directory(self, tmp_path):
+        """open_directory calls xdg-open with the path."""
+        from unittest.mock import patch
+
+        app = self._make_app(tmp_path)
+
+        with (
+            patch("scratch_monkey.gui.models.shutil.which", return_value="/usr/bin/xdg-open"),
+            patch("scratch_monkey.gui.models.subprocess.Popen") as mock_popen,
+        ):
+            app.open_directory("/some/path")
+
+        mock_popen.assert_called_once_with(["xdg-open", "/some/path"])
+        assert "Opened file manager" in app.status_message
+
+    def test_open_directory_no_xdg_open(self, tmp_path):
+        """open_directory sets error status when xdg-open is not found."""
+        from unittest.mock import patch
+
+        app = self._make_app(tmp_path)
+
+        with patch("scratch_monkey.gui.models.shutil.which", return_value=None):
+            app.open_directory("/some/path")
+
+        assert "xdg-open not found" in app.status_message
+
+    def test_open_terminal(self, tmp_path):
+        """open_terminal launches terminal with correct cwd."""
+        from unittest.mock import patch
+
+        app = self._make_app(tmp_path)
+
+        with (
+            patch("scratch_monkey.gui.models._find_terminal", return_value=["xdg-terminal-exec"]),
+            patch("scratch_monkey.gui.models.subprocess.Popen") as mock_popen,
+        ):
+            app.open_terminal("/some/path")
+
+        mock_popen.assert_called_once_with(["xdg-terminal-exec"], cwd="/some/path")
+        assert "Opened terminal" in app.status_message
+
+    def test_open_terminal_no_terminal(self, tmp_path):
+        """open_terminal sets error status when no terminal is found."""
+        from unittest.mock import patch
+
+        app = self._make_app(tmp_path)
+
+        with patch("scratch_monkey.gui.models._find_terminal", return_value=[]):
+            app.open_terminal("/some/path")
+
+        assert "No terminal emulator found" in app.status_message
 
 
 class TestPollStatus:

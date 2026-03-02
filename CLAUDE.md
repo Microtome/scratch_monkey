@@ -261,6 +261,8 @@ All podman calls go through `PodmanRunner` in `container.py`. Tests mock at this
 - **Overlay user setup**: only runs for fedora instances; scratch instances skip entirely
 - **Instance name validation**: always call `validate_name()` before creating/cloning
 - **Always clean up downstream impacts**: when a change makes existing code redundant or obsolete, remove or update that code in the same changeset
+- **Defensive defaults**: default to the most locked-down option (e.g. volume mounts default to `ro`, not `rw`). Only grant broader permissions when the user explicitly requests it
+- **Strict output, liberal input**: when parsing, accept loose formats (e.g. volume specs with or without a mode suffix). When serializing, always write the explicit, unambiguous form (e.g. always include `:ro` or `:rw` — never rely on implicit defaults)
 
 ### GUI / Enaml References
 

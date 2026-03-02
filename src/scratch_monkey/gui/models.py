@@ -68,12 +68,29 @@ def _open_in_editor(file_path: Path) -> str:
     return _launch_in_terminal([editor, str(file_path)])
 
 
+def _open_file_manager(path: str) -> str:
+    """Open a directory in the file manager via xdg-open. Returns error string or ''."""
+    if not shutil.which("xdg-open"):
+        return "xdg-open not found. Cannot open file manager."
+    subprocess.Popen(["xdg-open", path])
+    return ""
+
+
+def _open_terminal_at(path: str) -> str:
+    """Launch a terminal emulator with cwd set to path. Returns error string or ''."""
+    prefix = _find_terminal()
+    if not prefix:
+        return "No terminal emulator found. Install xdg-terminal-exec, gnome-terminal, or similar."
+    subprocess.Popen(prefix, cwd=path)
+    return ""
+
+
 class VolumeMountEntry(Atom):
     """Structured representation of a volume mount string like '/host:/container:ro'."""
 
     host_path = Str()
     container_path = Str()
-    mode = Str("rw")
+    mode = Str("ro")
 
     @classmethod
     def from_spec(cls, spec: str) -> VolumeMountEntry:
@@ -82,14 +99,12 @@ class VolumeMountEntry(Atom):
         if len(parts) == 3:
             return cls(host_path=parts[0], container_path=parts[1], mode=parts[2])
         elif len(parts) == 2:
-            return cls(host_path=parts[0], container_path=parts[1], mode="rw")
+            return cls(host_path=parts[0], container_path=parts[1], mode="ro")
         else:
-            return cls(host_path=spec, container_path=spec, mode="rw")
+            return cls(host_path=spec, container_path=spec, mode="ro")
 
     def to_spec(self) -> str:
-        """Serialize back to a volume spec string."""
-        if self.mode == "rw":
-            return f"{self.host_path}:{self.container_path}"
+        """Serialize back to a volume spec string. Always includes the mode suffix."""
         return f"{self.host_path}:{self.container_path}:{self.mode}"
 
 
@@ -395,6 +410,22 @@ class AppModel(Atom):
             deferred_call(_apply)
 
         threading.Thread(target=_poll, daemon=True).start()
+
+    def open_directory(self, path: str) -> None:
+        """Open a directory in the file manager."""
+        err = _open_file_manager(path)
+        if err:
+            self.status_message = err
+        else:
+            self.status_message = f"Opened file manager at {path}"
+
+    def open_terminal(self, path: str) -> None:
+        """Open a terminal at the given directory."""
+        err = _open_terminal_at(path)
+        if err:
+            self.status_message = err
+        else:
+            self.status_message = f"Opened terminal at {path}"
 
     def enter_instance(self, name: str, *, root: bool = False) -> None:
         """Open a terminal running scratch-monkey enter for the named instance."""

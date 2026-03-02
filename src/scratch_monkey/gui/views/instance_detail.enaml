@@ -39,6 +39,7 @@ enamldef ExportDialog(Dialog): dlg:
                 text << dlg._error_msg
                 visible << bool(dlg._error_msg)
             HGroup:
+                padding = 0
                 PushButton:
                     text = "Export"
                     enabled << bool(cmd_field.text.strip())
@@ -88,21 +89,68 @@ enamldef InstanceDetailPanel(Container): panel:
         ScrollArea:
             Container:
                 VGroup:
+                    spacing = 2
                     Label:
                         text << app_model.selected_instance
                         style_class = "instance-title"
 
                     Label:
-                        text << f"Path: {app_model.selected.directory}" if app_model.selected else "Path: —"
-
-                    Label:
                         text << f"Base: {app_model.selected.base_image}" if app_model.selected and app_model.selected.base_image else "Base: unknown"
+
+                    HGroup:
+                        align_widths = False
+                        padding = 0
+                        spacing = 2
+                        PushButton:
+                            text = "\u2750"
+                            minimum_size = (30, 0)
+                            maximum_size = (30, 16777215)
+                            clicked ::
+                                if app_model.selected:
+                                    app_model.open_directory(app_model.selected.directory)
+                            tool_tip = "Open instance directory in file manager"
+                        PushButton:
+                            text = "\u2318"
+                            minimum_size = (30, 0)
+                            maximum_size = (30, 16777215)
+                            clicked ::
+                                if app_model.selected:
+                                    app_model.open_terminal(app_model.selected.directory)
+                            tool_tip = "Open terminal in instance directory"
+                        Label:
+                            text << f"Path: {app_model.selected.directory}" if app_model.selected else "Path: \u2014"
+
+                    HGroup:
+                        align_widths = False
+                        padding = 0
+                        spacing = 2
+                        PushButton:
+                            text = "\u2302"
+                            minimum_size = (30, 0)
+                            maximum_size = (30, 16777215)
+                            clicked ::
+                                if app_model.selected:
+                                    home = app_model.selected.home if app_model.selected.home else f"{app_model.selected.directory}/home"
+                                    app_model.open_directory(home)
+                            tool_tip = "Open home directory in file manager"
+                        PushButton:
+                            text = "\u2318"
+                            minimum_size = (30, 0)
+                            maximum_size = (30, 16777215)
+                            clicked ::
+                                if app_model.selected:
+                                    home = app_model.selected.home if app_model.selected.home else f"{app_model.selected.directory}/home"
+                                    app_model.open_terminal(home)
+                            tool_tip = "Open terminal in home directory"
+                        Label:
+                            text << (f"Home: {app_model.selected.home}" if app_model.selected and app_model.selected.home else f"Home: {app_model.selected.directory}/home" if app_model.selected else "Home: \u2014")
 
                     GroupBox:
                         title = "Actions"
 
                         VGroup:
                             HGroup:
+                                padding = 0
                                 PushButton:
                                     text = "Enter"
                                     clicked ::
@@ -135,6 +183,7 @@ enamldef InstanceDetailPanel(Container): panel:
                                     tool_tip = "Remove the overlay container and discard its changes"
 
                             HGroup:
+                                padding = 0
                                 PushButton:
                                     text = "Export Cmd"
                                     clicked ::
@@ -162,6 +211,7 @@ enamldef InstanceDetailPanel(Container): panel:
                                     tool_tip = "Edit scratch.toml in your editor; config reloads when editor closes"
 
                     HGroup:
+                        padding = 0
                         PushButton:
                             text = "Save Config"
                             enabled << (app_model.selected.dirty if app_model.selected else False)

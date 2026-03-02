@@ -27,6 +27,7 @@ enamldef CreateSharedDialog(Dialog): dlg:
                 visible << bool(dlg._error_msg)
 
             HGroup:
+                padding = 0
                 PushButton:
                     text = "Create"
                     enabled << bool(name_field.text.strip())
@@ -55,6 +56,7 @@ enamldef ConfigEditorPanel(Container): editor:
 
         VGroup:
             HGroup:
+                padding = 0
                 Label:
                     text = "Command:"
                 Field:
@@ -66,6 +68,7 @@ enamldef ConfigEditorPanel(Container): editor:
                     tool_tip = "Shell command to run when entering the instance"
 
             HGroup:
+                padding = 0
                 Label:
                     text = "Home:"
                 Field:
@@ -73,9 +76,9 @@ enamldef ConfigEditorPanel(Container): editor:
                     text ::
                         if editor.model:
                             editor.model.home = text
-                    placeholder = "/home/dev"
+                    placeholder = "<instance>/home"
                     submit_triggers = ['lost_focus', 'return_pressed', 'auto_sync']
-                    tool_tip = "Home directory path inside the container"
+                    tool_tip = "Override default home path (default: <instance>/home)"
 
             CheckBox:
                 text = "Wayland"
@@ -118,6 +121,7 @@ enamldef ConfigEditorPanel(Container): editor:
 
                 HGroup:
                     align_widths = False
+                    padding = 0
                     Field:
                         hug_width = 'ignore'
                         text << (editor.model.volume_entries[loop.item].host_path if editor.model and loop.item < len(editor.model.volume_entries) else "")
@@ -139,8 +143,8 @@ enamldef ConfigEditorPanel(Container): editor:
                         submit_triggers = ['lost_focus', 'return_pressed', 'auto_sync']
 
                     ObjectCombo:
-                        items = ["rw", "ro"]
-                        selected << (editor.model.volume_entries[loop.item].mode if editor.model and loop.item < len(editor.model.volume_entries) else "rw")
+                        items = ["ro", "rw"]
+                        selected << (editor.model.volume_entries[loop.item].mode if editor.model and loop.item < len(editor.model.volume_entries) else "ro")
                         selected ::
                             if editor.model and loop.item < len(editor.model.volume_entries):
                                 editor.model.volume_entries[loop.item].mode = selected
@@ -170,6 +174,7 @@ enamldef ConfigEditorPanel(Container): editor:
 
                 HGroup:
                     align_widths = False
+                    padding = 0
                     Field:
                         hug_width = 'ignore'
                         maximum_size = (150, 16777215)
@@ -223,6 +228,7 @@ enamldef ConfigEditorPanel(Container): editor:
 
                 HGroup:
                     align_widths = False
+                    padding = 0
                     Field:
                         hug_width = 'ignore'
                         text << (editor.model.devices[loop.item] if editor.model and loop.item < len(editor.model.devices) else "")
@@ -270,6 +276,7 @@ enamldef ConfigEditorPanel(Container): editor:
                     iterable << (list(range(len(editor.model.shared_entries))) if editor.model else [])
 
                     HGroup:
+                        padding = 0
                         CheckBox:
                             text << (editor.model.shared_entries[loop.item].name if editor.model and loop.item < len(editor.model.shared_entries) else "")
                             checked << (editor.model.shared_entries[loop.item].enabled if editor.model and loop.item < len(editor.model.shared_entries) else False)
