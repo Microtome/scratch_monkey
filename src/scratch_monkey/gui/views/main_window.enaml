@@ -6,7 +6,7 @@ with enaml.imports():
 from enaml.stdlib.dialog_buttons import DialogButton
 
 from enaml.widgets.api import (
-    MainWindow, Container, Label, ToolBar, Action, Splitter, SplitItem
+    MainWindow, Container, Label, ToolBar, Action, Splitter, SplitItem, ProgressBar, HGroup
 )
 from enaml.layout.api import vbox, hbox
 
@@ -43,11 +43,11 @@ enamldef ScratchMonkeyWindow(MainWindow): win:
         Action:
             text = "Refresh"
             triggered ::
-                app_model.refresh()
+                app_model.refresh_async()
 
     Container:
         constraints = [
-            vbox(splitter, status)
+            vbox(splitter, status_bar)
         ]
 
         Splitter: splitter:
@@ -61,5 +61,14 @@ enamldef ScratchMonkeyWindow(MainWindow): win:
                 InstanceDetailPanel:
                     app_model = win.app_model
 
-        Label: status:
-            text << app_model.status_message
+        HGroup: status_bar:
+            padding = 0
+            trailing_spacer = None
+            ProgressBar: progress:
+                visible << app_model.busy
+                minimum = 0
+                maximum = 0
+                minimum_size = (120, 0)
+                maximum_size = (120, 16777215)
+            Label: status:
+                text << app_model.status_message
