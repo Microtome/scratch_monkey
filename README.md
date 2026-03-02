@@ -202,13 +202,16 @@ scratch-monkey gui                                # or via the CLI (respects --i
 scratch-monkey --instances-dir /path/to/dir gui  # use a custom instances directory
 ```
 
+![scratch-monkey GUI with Zed editor launched from inside an instance](screenshot.png)
+
 The GUI provides:
-- Instance list with image/overlay status
-- Configuration editing (cmd, wayland, ssh, overlay, GPU passthrough)
-- Volume mount management (add/remove host:container mounts, set rw/ro mode)
-- Device management (add/remove extra device paths)
-- Shared volume toggling (enable/disable per-instance, set rw/ro mode)
-- Action buttons (enter, enter as root, build, reset overlay, delete)
+- Instance list with start/stop toggle buttons and image/overlay status
+- Quick-open buttons to open instance path or home directory in a file manager or terminal
+- Configuration editing (cmd, wayland, ssh, home, overlay, GPU passthrough)
+- Volume mount management (add/remove host:container mounts, set ro/rw mode; defaults to ro)
+- Environment variable, device, and shared volume management
+- Action buttons (enter, enter as root, build, reset overlay, export cmd, edit files)
+- Live status polling with in-place overlay/image status updates
 
 ---
 
@@ -250,6 +253,7 @@ Build with `scratch-monkey build-instance myproject`, then run normally.
 | `/var/usrlocal` | `/var/usrlocal`, `/usr/local` | read-only |
 | `/var/opt` | `/var/opt` | read-only |
 | Instance `home/` | `/home/$USER` | read-write |
+| *(tmpfs)* | `/tmp` | read-write, in-memory |
 
 ### Fedora instances
 
