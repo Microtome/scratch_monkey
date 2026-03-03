@@ -188,6 +188,8 @@ def list_cmd(ctx: click.Context) -> None:
             active_parts.append("ssh=true")
         if cfg.overlay:
             active_parts.append("overlay=true")
+        if not cfg.sudo:
+            active_parts.append("sudo=false")
         if cfg.shared:
             active_parts.append(f"shared={cfg.shared}")
         config_str = ", ".join(active_parts) if active_parts else "(defaults)"
