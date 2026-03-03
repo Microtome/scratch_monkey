@@ -44,10 +44,11 @@ class PodmanRunner:
             input=input,
         )
         if check and result.returncode != 0:
+            stderr = result.stderr or ""
             raise PodmanError(
-                f"podman {args[0]!r} failed (exit {result.returncode}): {result.stderr.strip()}",
+                f"podman {args[0]!r} failed (exit {result.returncode}): {stderr.strip()}",
                 returncode=result.returncode,
-                stderr=result.stderr,
+                stderr=stderr,
             )
         return result
 

@@ -203,14 +203,15 @@ class TestBuildRunArgsFeatures:
         assert "/etc:/etc:ro" in args
 
     def test_scratch_instance_has_tmpfs(self, scratch_instance):
-        """Scratch instances get a tmpfs /tmp mount."""
+        """Scratch instances get tmpfs mounts for /tmp and /root."""
         args, _warnings = build_run_args(scratch_instance)
-        assert "--tmpfs" in args
-        tmpfs_idx = args.index("--tmpfs")
-        assert args[tmpfs_idx + 1] == "/tmp"
+        # Collect all tmpfs targets
+        tmpfs_targets = [args[i + 1] for i in range(len(args)) if args[i] == "--tmpfs" and i + 1 < len(args)]
+        assert "/tmp" in tmpfs_targets
+        assert "/root" in tmpfs_targets
 
     def test_fedora_instance_no_tmpfs(self, fedora_instance):
-        """Fedora instances do not get a tmpfs /tmp (they have their own)."""
+        """Fedora instances do not get tmpfs mounts (they have their own)."""
         args, _warnings = build_run_args(fedora_instance)
         assert "--tmpfs" not in args
 
