@@ -160,6 +160,8 @@ scratch-monkey reset myproject        # wipe the overlay container (prompts)
 
 > **Note:** Overlay user setup (`useradd`, `sudoers`) is only performed for fedora-based instances. Scratch instances mount `/etc` from the host read-only — the user already exists and sudo works via host config.
 
+> **Root entry:** `--root` sets the workdir to `/root`. Scratch images don't create `/root`, so scratch-monkey handles it automatically: in non-overlay mode, `/root` is a tmpfs mount; in overlay mode, `/root` is created in the container's writable layer on first root entry and persists across restarts.
+
 ---
 
 ## Shared volumes
