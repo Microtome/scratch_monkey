@@ -115,6 +115,12 @@ def exec_shell(
     container_home = f"/home/{user}"
 
     if root:
+        # Ensure /root exists — scratch images don't create it, and podman
+        # exec --workdir /root fails with "No such file or directory".
+        # Idempotent (harmless on fedora where /root already exists).
+        runner.exec_capture(
+            container_name, ["mkdir", "-p", "/root"], user="root",
+        )
         options = [
             "--user", "root",
             "--workdir", "/root",

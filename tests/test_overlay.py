@@ -226,7 +226,14 @@ class TestExecShell:
         assert "myinstance-overlay" not in cmd_args
 
     def test_exec_as_root(self, scratch_instance, mock_runner):
+        mock_runner.exec_capture.return_value = ""
         exec_shell(scratch_instance, mock_runner, "myinstance-overlay", root=True)
+
+        # Should mkdir -p /root before exec
+        mock_runner.exec_capture.assert_called_once_with(
+            "myinstance-overlay", ["mkdir", "-p", "/root"], user="root",
+        )
+
         call_args = mock_runner.exec_interactive.call_args
         container = call_args[0][0]
         options = call_args[1].get("options", [])
@@ -235,6 +242,12 @@ class TestExecShell:
         user_idx = options.index("--user")
         assert options[user_idx + 1] == "root"
         assert "/root" in options
+
+    def test_exec_as_user_no_mkdir(self, scratch_instance, mock_runner):
+        """Non-root entry must NOT run mkdir -p /root."""
+        with patch.dict(os.environ, {"USER": "testuser"}):
+            exec_shell(scratch_instance, mock_runner, "myinstance-overlay")
+        mock_runner.exec_capture.assert_not_called()
 
     def test_passes_cmd(self, scratch_instance, mock_runner):
         exec_shell(scratch_instance, mock_runner, "myinstance-overlay", cmd="/bin/zsh")

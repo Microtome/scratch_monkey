@@ -215,6 +215,18 @@ class TestRunDaemon:
             assert "infinity" in args
 
 
+class TestRunNoCaptureError:
+    def test_error_with_none_stderr(self, runner):
+        """When capture=False, stderr is None — _run must not crash."""
+        result = subprocess.CompletedProcess(args=[], returncode=1)
+        result.stdout = None
+        result.stderr = None
+        with patch("subprocess.run", return_value=result):
+            with pytest.raises(PodmanError) as exc_info:
+                runner.run(["--rm", "myimage"])
+            assert exc_info.value.stderr == ""
+
+
 class TestPodmanError:
     def test_attributes(self):
         err = PodmanError("failed", returncode=1, stderr="oops")

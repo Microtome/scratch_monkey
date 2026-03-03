@@ -82,6 +82,7 @@ def build_run_args(
             "-v", "/var/opt:/var/opt:ro",
             "-v", "/var/usrlocal:/usr/local:ro",
             "--tmpfs", "/tmp",
+            "--tmpfs", "/root",
         ]
 
     # Wayland

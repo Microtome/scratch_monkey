@@ -405,6 +405,7 @@ graph TD
             M3["/var/usrlocal:...:ro"]
             M4["/var/opt:/var/opt:ro"]
             M8["--tmpfs /tmp"]
+            M9["--tmpfs /root"]
         end
         subgraph fedora_mounts["Fedora"]
             M5["(none — self-contained)"]
@@ -505,6 +506,21 @@ sets up the user inside it:
 
 This is skipped for scratch instances because host `/etc` is bind-mounted
 read-only — the host user and sudo config are already visible.
+
+### Root entry
+
+When entering with `--root`, the workdir is set to `/root`. Scratch images
+don't create `/root`, so scratch-monkey ensures it exists:
+
+- **Non-overlay mode**: `/root` is mounted as a tmpfs (in-memory, ephemeral).
+  It exists for the lifetime of the container and is discarded on exit.
+- **Overlay mode**: `/root` is created via `mkdir -p /root` in the container's
+  writable layer on first root entry. It persists across container restarts
+  and survives `stop`/`start` cycles. Only `reset` removes it (along with
+  all other writable-layer changes).
+
+Fedora instances already have `/root` in their base image, so the mkdir
+is a no-op.
 
 ### Reset
 
