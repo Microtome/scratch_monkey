@@ -10,7 +10,7 @@ The top-level Claude instance acts exclusively as **Program Manager (PM)**. The 
 - Spawn and direct coding agents (each in their own worktree)
 - Analyze each agent's completed work before merging
 - Spawn QA agents to review merged work and find gaps
-- Iterate until the topic branch is complete and ready to merge to `master`
+- Iterate until the topic branch is complete and ready to merge to `main`
 
 **The PM never edits source files, runs tests, or writes implementation code.**
 
@@ -83,7 +83,7 @@ When done, the agent must print a structured summary so the PM can verify withou
 1. Read requirements (issue, conversation, or TODO)
 2. Decompose into discrete features/tasks
 3. Identify dependencies between features
-4. Create a topic branch off `master`:
+4. Create a topic branch off `main`:
    ```bash
    git checkout -b feat/<topic>
    ```
@@ -149,13 +149,13 @@ When an agent completes:
 Once all feature agents have merged into the topic branch:
 
 1. Spawn one or more QA agents (`sonnet` or `opus`) with the task:
-   - Review all changes on the topic branch vs `master`
+   - Review all changes on the topic branch vs `main`
    - Identify missing edge case tests
    - Identify code quality issues (dead code, unclear logic, missing type hints on public functions)
    - Identify any features from the original spec that were missed
 2. Analyze QA agent reports
 3. If gaps found: return to Phase 2 with the remaining work
-4. If clean: merge topic branch to `master` with a conventional commit
+4. If clean: merge topic branch to `main` with a conventional commit
 
 ### Phase 6 — Repeat
 
@@ -166,7 +166,7 @@ If new requirements emerge or QA finds significant gaps, repeat from Phase 1 wit
 ## Branch Conventions
 
 ```
-master            — always releasable
+main              — always releasable
 feat/<topic>      — topic branch owned by PM for a feature set
 fix/<topic>       — bug fix topic branch
 ```
@@ -201,7 +201,7 @@ docs: document overlay mode in README
 - **Build**: hatchling (`pyproject.toml`)
 - **CLI**: Click
 - **GUI**: Enaml + Qt6 (optional dep)
-- **Tests**: pytest (368 tests, no real podman required)
+- **Tests**: pytest (375 tests, no real podman required)
 - **Lint/format**: ruff
 
 ### Key Commands
