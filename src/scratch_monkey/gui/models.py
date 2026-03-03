@@ -33,6 +33,7 @@ from ..instance import (
     create,
     delete,
     detect_base_image,
+    is_fedora_based,
     list_all,
     rename,
     skel_copy,
@@ -144,6 +145,8 @@ class InstanceModel(Atom):
     ssh = Bool(False)
     home = Str("")
     overlay = Bool(False)
+    sudo = Bool(True)
+    is_fedora = Bool(False)
     gpu = Bool(False)
     devices = List(str)
     shared = List(str)
@@ -170,6 +173,8 @@ class InstanceModel(Atom):
         m.ssh = cfg.ssh
         m.home = cfg.home
         m.overlay = cfg.overlay
+        m.sudo = cfg.sudo
+        m.is_fedora = is_fedora_based(Path(info.directory))
         m.gpu = cfg.gpu
         m.devices = list(cfg.devices)
         m.shared = list(cfg.shared)
@@ -193,12 +198,13 @@ class InstanceModel(Atom):
                 if e.enabled
             ],
             overlay=self.overlay,
+            sudo=self.sudo,
             gpu=self.gpu,
             devices=list(self.devices),
         )
 
     @observe(
-        'cmd', 'wayland', 'ssh', 'home', 'overlay', 'gpu', 'devices',
+        'cmd', 'wayland', 'ssh', 'home', 'overlay', 'sudo', 'gpu', 'devices',
         'volume_entries', 'env_vars', 'shared_entries',
     )
     def _on_config_change(self, change):
@@ -219,6 +225,7 @@ class InstanceModel(Atom):
             self.ssh = cfg.ssh
             self.home = cfg.home
             self.overlay = cfg.overlay
+            self.sudo = cfg.sudo
             self.gpu = cfg.gpu
             self.devices = list(cfg.devices)
             self.env_vars = list(cfg.env)

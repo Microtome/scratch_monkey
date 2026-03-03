@@ -50,7 +50,7 @@ def ensure_running(
         # Scratch instances mount /etc from the host read-only — the user
         # already exists on the host and sudo works via host config.
         if is_fedora_based(instance.directory):
-            _setup_fedora_user(container_name, runner)
+            _setup_fedora_user(container_name, runner, sudo=instance.config.sudo)
 
     elif not runner.container_running(container_name):
         runner.start(container_name)
@@ -58,20 +58,26 @@ def ensure_running(
     return container_name
 
 
-def _setup_fedora_user(container_name: str, runner: PodmanRunner) -> None:
-    """Install sudo and create the host user with passwordless sudo access."""
+def _setup_fedora_user(container_name: str, runner: PodmanRunner, *, sudo: bool = True) -> None:
+    """Create the host user in a fedora overlay container.
+
+    If sudo=True (default), also installs the sudo package and grants
+    passwordless sudo to the user. If sudo=False, only useradd is run —
+    the sudo package is not installed and no sudoers entry is written.
+    """
     username = os.environ.get("USER", "user")
     uid = os.getuid()
 
-    # Install sudo if missing
-    try:
-        runner.exec_capture(
-            container_name,
-            ["bash", "-c", "rpm -q sudo &>/dev/null || dnf install -y sudo"],
-            user="root",
-        )
-    except PodmanError as exc:
-        logger.debug("sudo install skipped: %s", exc)
+    if sudo:
+        # Install sudo if missing
+        try:
+            runner.exec_capture(
+                container_name,
+                ["bash", "-c", "rpm -q sudo &>/dev/null || dnf install -y sudo"],
+                user="root",
+            )
+        except PodmanError as exc:
+            logger.debug("sudo install skipped: %s", exc)
 
     # Create user (ignore error if already exists)
     try:
@@ -83,19 +89,20 @@ def _setup_fedora_user(container_name: str, runner: PodmanRunner) -> None:
     except PodmanError as exc:
         logger.debug("useradd skipped (user may exist): %s", exc)
 
-    # Grant passwordless sudo — use tee to avoid shell interpolation of username
-    sudoers_line = f"{username} ALL=(ALL) NOPASSWD: ALL\n"
-    runner.exec_capture(
-        container_name,
-        ["tee", f"/etc/sudoers.d/{username}"],
-        user="root",
-        input=sudoers_line,
-    )
-    runner.exec_capture(
-        container_name,
-        ["chmod", "440", f"/etc/sudoers.d/{username}"],
-        user="root",
-    )
+    if sudo:
+        # Grant passwordless sudo — use tee to avoid shell interpolation of username
+        sudoers_line = f"{username} ALL=(ALL) NOPASSWD: ALL\n"
+        runner.exec_capture(
+            container_name,
+            ["tee", f"/etc/sudoers.d/{username}"],
+            user="root",
+            input=sudoers_line,
+        )
+        runner.exec_capture(
+            container_name,
+            ["chmod", "440", f"/etc/sudoers.d/{username}"],
+            user="root",
+        )
 
 
 def exec_shell(

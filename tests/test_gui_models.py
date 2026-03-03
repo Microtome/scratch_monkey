@@ -1,5 +1,7 @@
 """Tests for scratch_monkey.gui.models volume support."""
 
+from pathlib import Path
+
 import pytest
 
 atom = pytest.importorskip("atom")
@@ -1563,3 +1565,83 @@ class TestPollStatus:
             done.wait(timeout=2)
 
         assert app._polling is False
+
+
+class TestSudoModel:
+    def test_from_info_sudo_true(self):
+        info = InstanceInfo(
+            name="test", directory=Path("/tmp/test"),
+            image_built=False, overlay_running=False,
+            config=InstanceConfig(sudo=True), base_image="",
+        )
+        m = InstanceModel.from_info(info)
+        assert m.sudo is True
+
+    def test_from_info_sudo_false(self):
+        info = InstanceInfo(
+            name="test", directory=Path("/tmp/test"),
+            image_built=False, overlay_running=False,
+            config=InstanceConfig(sudo=False), base_image="",
+        )
+        m = InstanceModel.from_info(info)
+        assert m.sudo is False
+
+    def test_to_config_includes_sudo(self):
+        m = InstanceModel()
+        m.sudo = False
+        cfg = m.to_config()
+        assert cfg.sudo is False
+
+    def test_sudo_change_triggers_dirty(self):
+        info = InstanceInfo(
+            name="test", directory=Path("/tmp/test"),
+            image_built=False, overlay_running=False,
+            config=InstanceConfig(sudo=True), base_image="",
+        )
+        m = InstanceModel.from_info(info)
+        assert m.dirty is False
+        m.sudo = False
+        assert m.dirty is True
+
+    def test_revert_restores_sudo(self):
+        info = InstanceInfo(
+            name="test", directory=Path("/tmp/test"),
+            image_built=False, overlay_running=False,
+            config=InstanceConfig(sudo=True), base_image="",
+        )
+        m = InstanceModel.from_info(info)
+        m.sudo = False
+        assert m.dirty is True
+        m.revert()
+        assert m.sudo is True
+        assert m.dirty is False
+
+    def test_is_fedora_true(self, tmp_path):
+        inst_dir = tmp_path / "fedtest"
+        inst_dir.mkdir()
+        (inst_dir / "Dockerfile").write_text("FROM scratch_monkey_fedora\n")
+        (inst_dir / "home").mkdir()
+        (inst_dir / "scratch.toml").write_text("")
+        (inst_dir / ".env").touch()
+        info = InstanceInfo(
+            name="fedtest", directory=inst_dir,
+            image_built=False, overlay_running=False,
+            config=InstanceConfig(), base_image="",
+        )
+        m = InstanceModel.from_info(info)
+        assert m.is_fedora is True
+
+    def test_is_fedora_false(self, tmp_path):
+        inst_dir = tmp_path / "scrtest"
+        inst_dir.mkdir()
+        (inst_dir / "Dockerfile").write_text("FROM scratch_monkey\n")
+        (inst_dir / "home").mkdir()
+        (inst_dir / "scratch.toml").write_text("")
+        (inst_dir / ".env").touch()
+        info = InstanceInfo(
+            name="scrtest", directory=inst_dir,
+            image_built=False, overlay_running=False,
+            config=InstanceConfig(), base_image="",
+        )
+        m = InstanceModel.from_info(info)
+        assert m.is_fedora is False

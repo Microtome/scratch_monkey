@@ -252,6 +252,38 @@ class TestGenerateOverlayId:
         assert generate_overlay_id() != generate_overlay_id()
 
 
+# ─── sudo ─────────────────────────────────────────────────────────────────────
+
+
+class TestSudo:
+    def test_default_sudo_true(self, tmp_path):
+        """Missing sudo key defaults to True."""
+        toml = tmp_path / "scratch.toml"
+        toml.write_text("")
+        cfg = load(toml)
+        assert cfg.sudo is True
+
+    def test_parses_sudo_false(self, tmp_path):
+        """Explicit sudo = false is parsed correctly."""
+        toml = tmp_path / "scratch.toml"
+        toml.write_text("sudo = false\n")
+        cfg = load(toml)
+        assert cfg.sudo is False
+
+    def test_sudo_serialized(self):
+        """sudo field appears in serialized output."""
+        text = _serialize(InstanceConfig(sudo=False))
+        assert "sudo = false" in text
+
+    def test_roundtrip_sudo_false(self, tmp_path):
+        """sudo=False survives save + load."""
+        path = tmp_path / "scratch.toml"
+        cfg = InstanceConfig(sudo=False)
+        save(path, cfg)
+        loaded = load(path)
+        assert loaded.sudo is False
+
+
 # ─── overlay_id round-trip ────────────────────────────────────────────────────
 
 

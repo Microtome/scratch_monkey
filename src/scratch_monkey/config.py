@@ -48,6 +48,7 @@ class InstanceConfig:
     env: list[str] = field(default_factory=list)
     shared: list[str] = field(default_factory=list)
     overlay: bool = False
+    sudo: bool = True
     gpu: bool = False
     devices: list[str] = field(default_factory=list)
     overlay_id: str = ""
@@ -86,6 +87,7 @@ def load(path: Path) -> InstanceConfig:
         env=_strlist(data.get("env", [])),
         shared=_strlist(data.get("shared", [])),
         overlay=_bool(data.get("overlay", False)),
+        sudo=_bool(data.get("sudo", True)),
         gpu=_bool(data.get("gpu", False)),
         devices=_strlist(data.get("devices", [])),
         overlay_id=str(data.get("overlay_id", "")),
@@ -151,6 +153,7 @@ def _serialize(config: InstanceConfig) -> str:
     lines.append(f"env = {_toml_strlist(config.env)}\n")
     lines.append(f"shared = {_toml_strlist(config.shared)}\n")
     lines.append(f"overlay = {str(config.overlay).lower()}\n")
+    lines.append(f"sudo = {str(config.sudo).lower()}\n")
     lines.append(f"gpu = {str(config.gpu).lower()}\n")
     lines.append(f"devices = {_toml_strlist(config.devices)}\n")
     if config.overlay_id:

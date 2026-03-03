@@ -10,9 +10,10 @@ The top-level Claude instance acts exclusively as **Program Manager (PM)**. The 
 - Spawn and direct coding agents (each in their own worktree)
 - Analyze each agent's completed work before merging
 - Spawn QA agents to review merged work and find gaps
-- Iterate until the topic branch is complete and ready to merge to `main`
+- Iterate until the topic branch is complete and ready for review
+- Push topic branches to GitHub for the user to merge via PR
 
-**The PM never edits source files, runs tests, or writes implementation code.**
+**The PM never edits source files, runs tests, writes implementation code, or merges to `main`.**
 
 ---
 
@@ -155,7 +156,12 @@ Once all feature agents have merged into the topic branch:
    - Identify any features from the original spec that were missed
 2. Analyze QA agent reports
 3. If gaps found: return to Phase 2 with the remaining work
-4. If clean: merge topic branch to `main` with a conventional commit
+4. If clean: push the topic branch to GitHub:
+   ```bash
+   git push -u origin feat/<topic>
+   ```
+
+**The PM never merges to `main` directly.** The user reviews the pushed branch and merges via PR at their discretion.
 
 ### Phase 6 — Repeat
 
@@ -201,7 +207,7 @@ docs: document overlay mode in README
 - **Build**: hatchling (`pyproject.toml`)
 - **CLI**: Click
 - **GUI**: Enaml + Qt6 (optional dep)
-- **Tests**: pytest (375 tests, no real podman required)
+- **Tests**: pytest (390 tests, no real podman required)
 - **Lint/format**: ruff
 
 ### Key Commands

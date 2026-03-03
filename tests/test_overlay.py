@@ -154,6 +154,26 @@ class TestEnsureRunning:
         captured = capsys.readouterr()
         assert "Warning:" in captured.err
 
+    def test_fedora_sudo_false_skips_sudoers(self, fedora_instance, mock_runner):
+        """config.sudo=False propagates to _setup_fedora_user."""
+        mock_runner.container_exists.return_value = False
+        mock_runner.exec_capture.return_value = ""
+        fedora_instance.config.sudo = False
+        ensure_running(fedora_instance, mock_runner, "scratch_monkey_fedora")
+        all_calls = mock_runner.exec_capture.call_args_list
+        sudoers_called = any("sudoers" in str(c) for c in all_calls)
+        assert not sudoers_called
+
+    def test_fedora_sudo_true_writes_sudoers(self, fedora_instance, mock_runner):
+        """config.sudo=True (default) still writes sudoers."""
+        mock_runner.container_exists.return_value = False
+        mock_runner.exec_capture.return_value = ""
+        fedora_instance.config.sudo = True
+        ensure_running(fedora_instance, mock_runner, "scratch_monkey_fedora")
+        all_calls = mock_runner.exec_capture.call_args_list
+        sudoers_called = any("sudoers" in str(c) for c in all_calls)
+        assert sudoers_called
+
 
 # ─── _setup_fedora_user ───────────────────────────────────────────────────────
 
@@ -204,6 +224,29 @@ class TestSetupFedoraUser:
         all_calls = mock_runner.exec_capture.call_args_list
         chown_called = any("chown" in str(c) for c in all_calls)
         assert not chown_called, "chown must not be called when --userns=keep-id is used"
+
+    def test_skips_sudo_when_disabled(self, mock_runner):
+        """sudo=False skips sudo install and sudoers but keeps useradd."""
+        mock_runner.exec_capture.return_value = ""
+        with patch.dict(os.environ, {"USER": "testuser"}):
+            _setup_fedora_user("mycontainer", mock_runner, sudo=False)
+        all_calls = mock_runner.exec_capture.call_args_list
+        # useradd should still be called
+        useradd_called = any("useradd" in str(c) for c in all_calls)
+        assert useradd_called
+        # sudoers should NOT be called
+        sudoers_called = any("sudoers" in str(c) for c in all_calls)
+        assert not sudoers_called
+        # sudo install should NOT be called
+        sudo_install_called = any("dnf install" in str(c) for c in all_calls)
+        assert not sudo_install_called
+
+    def test_only_useradd_when_sudo_false(self, mock_runner):
+        """With sudo=False, exactly 1 exec_capture call (useradd)."""
+        mock_runner.exec_capture.return_value = ""
+        with patch.dict(os.environ, {"USER": "testuser"}):
+            _setup_fedora_user("mycontainer", mock_runner, sudo=False)
+        assert len(mock_runner.exec_capture.call_args_list) == 1
 
 
 # ─── exec_shell ───────────────────────────────────────────────────────────────
