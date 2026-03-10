@@ -81,10 +81,16 @@ When done, the agent must print a structured summary so the PM can verify withou
 
 ### Phase 1 — Plan
 
-1. Read requirements (issue, conversation, or TODO)
-2. Decompose into discrete features/tasks
-3. Identify dependencies between features
-4. Create a topic branch off `main`:
+1. **Sync local main** before any planning or branching:
+   ```bash
+   git checkout main
+   git pull --ff-only origin main
+   ```
+   Stale local `main` causes worktree agents to branch off old commits, pulling in unrelated changes on merge.
+2. Read requirements (issue, conversation, or TODO)
+3. Decompose into discrete features/tasks
+4. Identify dependencies between features
+5. Create a topic branch off `main`:
    ```bash
    git checkout -b feat/<topic>
    ```
