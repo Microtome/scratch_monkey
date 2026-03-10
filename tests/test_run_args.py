@@ -6,6 +6,11 @@ from unittest.mock import patch
 from scratch_monkey.overlay import ensure_running
 from scratch_monkey.run_args import build_run_args, gpu_devices
 
+# Save references to real os.path functions before any patching
+_real_isdir = os.path.isdir
+_real_exists = os.path.exists
+_real_expanduser = os.path.expanduser
+
 # ─── gpu_devices ─────────────────────────────────────────────────────────────
 
 
@@ -229,3 +234,144 @@ class TestBuildRunArgsFeatures:
         scratch_instance.config.shared = ["nonexistent"]
         args, warnings = build_run_args(scratch_instance)
         assert any("nonexistent" in w for w in warnings)
+
+
+# ─── build_run_args X11 ─────────────────────────────────────────────────────
+
+
+class TestBuildRunArgsX11:
+    """Tests for X11 display socket sharing in build_run_args."""
+
+    def test_x11_socket_and_display_detected(self, scratch_instance, tmp_path):
+        """X11 mounts DISPLAY, socket dir, and Xauthority when all present."""
+        scratch_instance.config.x11 = True
+        xauth_path = str(tmp_path / ".Xauthority")
+
+        def mock_isdir(path):
+            if path == "/tmp/.X11-unix":
+                return True
+            return _real_isdir(path)
+
+        def mock_exists(path):
+            if str(path) == xauth_path:
+                return True
+            return _real_exists(path)
+
+        def mock_expanduser(path):
+            if path == "~/.Xauthority":
+                return xauth_path
+            return _real_expanduser(path)
+
+        with (
+            patch.dict(os.environ, {"DISPLAY": ":0", "USER": "testuser"}, clear=False),
+            patch("scratch_monkey.run_args.os.path.isdir", side_effect=mock_isdir),
+            patch("scratch_monkey.run_args.os.path.exists", side_effect=mock_exists),
+            patch("scratch_monkey.run_args.os.path.expanduser", side_effect=mock_expanduser),
+        ):
+            os.environ.pop("XAUTHORITY", None)
+            os.environ["DISPLAY"] = ":0"
+            args, warnings = build_run_args(scratch_instance, is_fedora=False)
+
+        assert "-v" in args
+        assert "/tmp/.X11-unix:/tmp/.X11-unix:ro" in args
+        assert "DISPLAY=:0" in args
+        assert f"{xauth_path}:/tmp/.container-Xauthority:ro" in args
+        assert "XAUTHORITY=/tmp/.container-Xauthority" in args
+        assert len(warnings) == 0
+
+    def test_x11_missing_display(self, scratch_instance):
+        """Warning when DISPLAY is empty."""
+        scratch_instance.config.x11 = True
+        with patch.dict(os.environ, {"DISPLAY": ""}, clear=False):
+            args, warnings = build_run_args(scratch_instance)
+        assert any("x11" in w.lower() for w in warnings)
+        assert "/tmp/.X11-unix:/tmp/.X11-unix:ro" not in args
+
+    def test_x11_missing_socket_dir(self, scratch_instance):
+        """Warning when X11 socket dir does not exist."""
+        scratch_instance.config.x11 = True
+
+        def mock_isdir(path):
+            if path == "/tmp/.X11-unix":
+                return False
+            return _real_isdir(path)
+
+        with (
+            patch.dict(os.environ, {"DISPLAY": ":0"}, clear=False),
+            patch("scratch_monkey.run_args.os.path.isdir", side_effect=mock_isdir),
+        ):
+            args, warnings = build_run_args(scratch_instance)
+        assert any("x11" in w.lower() for w in warnings)
+        assert "/tmp/.X11-unix:/tmp/.X11-unix:ro" not in args
+
+    def test_x11_missing_xauthority(self, scratch_instance, tmp_path):
+        """Socket and DISPLAY mounted but no XAUTHORITY when file missing."""
+        scratch_instance.config.x11 = True
+        xauth_path = str(tmp_path / ".Xauthority-nonexistent")
+
+        def mock_isdir(path):
+            if path == "/tmp/.X11-unix":
+                return True
+            return _real_isdir(path)
+
+        def mock_exists(path):
+            if str(path) == xauth_path:
+                return False
+            return _real_exists(path)
+
+        def mock_expanduser(path):
+            if path == "~/.Xauthority":
+                return xauth_path
+            return _real_expanduser(path)
+
+        with (
+            patch.dict(os.environ, {"DISPLAY": ":0"}, clear=False),
+            patch("scratch_monkey.run_args.os.path.isdir", side_effect=mock_isdir),
+            patch("scratch_monkey.run_args.os.path.exists", side_effect=mock_exists),
+            patch("scratch_monkey.run_args.os.path.expanduser", side_effect=mock_expanduser),
+        ):
+            os.environ.pop("XAUTHORITY", None)
+            args, warnings = build_run_args(scratch_instance, is_fedora=False)
+
+        assert "/tmp/.X11-unix:/tmp/.X11-unix:ro" in args
+        assert "DISPLAY=:0" in args
+        # No XAUTHORITY mount or env
+        assert "/tmp/.container-Xauthority:ro" not in " ".join(args)
+        assert "XAUTHORITY=/tmp/.container-Xauthority" not in args
+
+    def test_x11_and_gpu_combined(self, scratch_instance):
+        """Both X11 and GPU args present when both enabled."""
+        scratch_instance.config.x11 = True
+        scratch_instance.config.gpu = True
+
+        def mock_isdir(path):
+            if path == "/tmp/.X11-unix":
+                return True
+            return _real_isdir(path)
+
+        def mock_exists(path):
+            if str(path).endswith(".Xauthority"):
+                return False
+            return _real_exists(path)
+
+        def mock_expanduser(path):
+            if path == "~/.Xauthority":
+                return "/home/testuser/.Xauthority"
+            return _real_expanduser(path)
+
+        with (
+            patch.dict(os.environ, {"DISPLAY": ":0"}, clear=False),
+            patch("scratch_monkey.run_args.os.path.isdir", side_effect=mock_isdir),
+            patch("scratch_monkey.run_args.os.path.exists", side_effect=mock_exists),
+            patch("scratch_monkey.run_args.os.path.expanduser", side_effect=mock_expanduser),
+            patch("scratch_monkey.run_args.gpu_devices", return_value=["/dev/dri"]),
+        ):
+            os.environ.pop("XAUTHORITY", None)
+            args, warnings = build_run_args(scratch_instance, is_fedora=False)
+
+        # X11 mounts present
+        assert "/tmp/.X11-unix:/tmp/.X11-unix:ro" in args
+        assert "DISPLAY=:0" in args
+        # GPU device present
+        assert "--device" in args
+        assert "/dev/dri" in args

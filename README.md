@@ -93,6 +93,7 @@ scratch-monkey enter <name> --root        # root shell
 scratch-monkey run   <name>               # same as enter
 scratch-monkey run   <name> --wayland     # override: enable Wayland
 scratch-monkey run   <name> --ssh         # override: enable SSH agent
+scratch-monkey run   <name> --x11         # override: enable X11 sharing
 scratch-monkey run   <name> --cmd /bin/zsh
 
 scratch-monkey start <name>               # start overlay container (headless)
@@ -109,6 +110,7 @@ All fields are optional — commented-out defaults are shown when an instance is
 |-------|------|---------|-------------|
 | `cmd` | string | `/bin/bash` | Command to run on entry |
 | `wayland` | bool | `false` | Mount Wayland socket, set `WAYLAND_DISPLAY` |
+| `x11` | bool | `false` | Mount X11 socket, set `DISPLAY` and `XAUTHORITY` |
 | `ssh` | bool | `false` | Forward `SSH_AUTH_SOCK` for SSH agent access |
 | `home` | string | `""` | Override the instance `home/` dir with a custom path |
 | `volumes` | list | `[]` | Extra volume mounts (`host:container:mode`) |
@@ -123,6 +125,7 @@ Example:
 ```toml
 cmd = "/bin/zsh"
 wayland = true
+x11 = true
 ssh = true
 volumes = ["/home/linuxbrew/.linuxbrew:/home/linuxbrew/.linuxbrew:ro"]
 shared = ["comms", "data:ro"]
@@ -294,7 +297,7 @@ Fedora instances use their own filesystem — no host system mounts.
 | `edit <name>` | Edit instance files (`--file config\|dockerfile\|env`) |
 | `build` | Build the base image (`--fedora`) |
 | `build-instance <name>` | Build an instance's Dockerfile |
-| `run <name>` | Run an instance (`--root`, `--wayland`, `--ssh`, `--cmd`) |
+| `run <name>` | Run an instance (`--root`, `--wayland`, `--ssh`, `--x11`, `--cmd`) |
 | `enter <name>` | Interactive shell (`--root` for root) |
 | `start <name>` | Start overlay container (creates if needed) |
 | `stop <name>` | Stop overlay container |

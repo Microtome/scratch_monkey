@@ -98,6 +98,22 @@ def build_run_args(
         else:
             warnings.append(f"Wayland socket not found at {wayland_sock}, skipping.")
 
+    # X11
+    if cfg.x11:
+        display = os.environ.get("DISPLAY", "")
+        x11_sock_dir = "/tmp/.X11-unix"
+        xauth_file = os.environ.get("XAUTHORITY", os.path.expanduser("~/.Xauthority"))
+
+        if display and os.path.isdir(x11_sock_dir):
+            args += ["-v", f"{x11_sock_dir}:{x11_sock_dir}:ro"]
+            args += ["-e", f"DISPLAY={display}"]
+            if os.path.exists(xauth_file):
+                container_xauth = "/tmp/.container-Xauthority"
+                args += ["-v", f"{xauth_file}:{container_xauth}:ro"]
+                args += ["-e", f"XAUTHORITY={container_xauth}"]
+        else:
+            warnings.append("x11 enabled but DISPLAY not set or X11 socket dir not found")
+
     # SSH
     if cfg.ssh:
         ssh_sock = os.environ.get("SSH_AUTH_SOCK", "")

@@ -184,6 +184,8 @@ def list_cmd(ctx: click.Context) -> None:
         active_parts = []
         if cfg.wayland:
             active_parts.append("wayland=true")
+        if cfg.x11:
+            active_parts.append("x11=true")
         if cfg.ssh:
             active_parts.append("ssh=true")
         if cfg.overlay:
@@ -294,6 +296,7 @@ def build_instance(ctx: click.Context, name: str) -> None:
 @click.option("--root", is_flag=True, default=False, help="Run as root.")
 @click.option("--wayland", is_flag=True, default=False, help="Enable Wayland socket sharing.")
 @click.option("--ssh", is_flag=True, default=False, help="Enable SSH agent sharing.")
+@click.option("--x11", is_flag=True, default=False, help="Enable X11 display sharing.")
 @click.option("--cmd", default="", help="Override the command to run.")
 @click.pass_context
 def run(
@@ -302,6 +305,7 @@ def run(
     root: bool,
     wayland: bool,
     ssh: bool,
+    x11: bool,
     cmd: str,
 ) -> None:
     """Run a scratch-monkey instance."""
@@ -315,6 +319,8 @@ def run(
         cfg.wayland = True
     if ssh:
         cfg.ssh = True
+    if x11:
+        cfg.x11 = True
     if cmd:
         cfg.cmd = cmd
 
