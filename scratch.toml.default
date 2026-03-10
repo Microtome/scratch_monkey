@@ -27,3 +27,6 @@
 # When enabled, a named container is kept between sessions so writes to the
 # filesystem (e.g. dnf/apt installs) survive. Use: just reset <name> to wipe it.
 # overlay = false
+
+# Passwordless sudo in overlay mode (fedora instances only)
+# sudo = true

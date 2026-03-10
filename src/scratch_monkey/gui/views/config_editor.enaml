@@ -104,6 +104,17 @@ enamldef ConfigEditorPanel(Container): editor:
                         editor.model.overlay = checked
                 tool_tip = "Run a persistent overlay container instead of a fresh one each time"
 
+            Conditional:
+                condition << (editor.model.overlay and editor.model.is_fedora if editor.model else False)
+
+                CheckBox:
+                    text = "Passwordless sudo"
+                    checked << (editor.model.sudo if editor.model else True)
+                    toggled ::
+                        if editor.model:
+                            editor.model.sudo = checked
+                    tool_tip = "Grant passwordless sudo in the overlay container (takes effect on next overlay reset)"
+
             CheckBox:
                 text = "GPU Passthrough"
                 checked << (editor.model.gpu if editor.model else False)
