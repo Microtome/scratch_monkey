@@ -1645,3 +1645,40 @@ class TestSudoModel:
         )
         m = InstanceModel.from_info(info)
         assert m.is_fedora is False
+
+
+class TestX11Model:
+    def test_from_info_x11_true(self):
+        info = InstanceInfo(
+            name="test", directory=Path("/tmp/test"),
+            image_built=False, overlay_running=False,
+            config=InstanceConfig(x11=True), base_image="",
+        )
+        m = InstanceModel.from_info(info)
+        assert m.x11 is True
+
+    def test_from_info_x11_false(self):
+        info = InstanceInfo(
+            name="test", directory=Path("/tmp/test"),
+            image_built=False, overlay_running=False,
+            config=InstanceConfig(x11=False), base_image="",
+        )
+        m = InstanceModel.from_info(info)
+        assert m.x11 is False
+
+    def test_to_config_includes_x11(self):
+        m = InstanceModel()
+        m.x11 = True
+        cfg = m.to_config()
+        assert cfg.x11 is True
+
+    def test_x11_change_triggers_dirty(self):
+        info = InstanceInfo(
+            name="test", directory=Path("/tmp/test"),
+            image_built=False, overlay_running=False,
+            config=InstanceConfig(x11=False), base_image="",
+        )
+        m = InstanceModel.from_info(info)
+        assert m.dirty is False
+        m.x11 = True
+        assert m.dirty is True

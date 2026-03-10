@@ -97,6 +97,14 @@ enamldef ConfigEditorPanel(Container): editor:
                 tool_tip = "Forward SSH agent socket into the container"
 
             CheckBox:
+                text = "X11"
+                checked << (editor.model.x11 if editor.model else False)
+                toggled ::
+                    if editor.model:
+                        editor.model.x11 = checked
+                tool_tip = "Forward X11 display socket and Xauthority for GUI applications"
+
+            CheckBox:
                 text = "Overlay mode"
                 checked << (editor.model.overlay if editor.model else False)
                 toggled ::
