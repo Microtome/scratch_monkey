@@ -23,17 +23,34 @@ def short_hostname() -> str:
     return socket.gethostname().split(".")[0]
 
 
+def nvidia_cdi_available() -> bool:
+    """Check if NVIDIA Container Device Interface is configured."""
+    return os.path.exists("/etc/cdi/nvidia.yaml")
+
+
 def gpu_devices() -> list[str]:
-    """Detect available GPU device paths."""
+    """Detect available GPU device paths.
+
+    Returns CDI device specs (e.g. "nvidia.com/gpu=all") when NVIDIA CDI is
+    available, otherwise falls back to raw /dev paths.
+    """
     devices = []
+
+    # Prefer NVIDIA CDI — it handles device nodes, driver libs, and symlinks
+    if nvidia_cdi_available() and os.path.exists("/dev/nvidia0"):
+        devices.append("nvidia.com/gpu=all")
+    else:
+        # Manual NVIDIA device passthrough (no driver libs injected)
+        for name in ("nvidia0", "nvidiactl", "nvidia-modeset", "nvidia-uvm", "nvidia-uvm-tools"):
+            path = f"/dev/{name}"
+            if os.path.exists(path):
+                devices.append(path)
+
     if os.path.exists("/dev/dri"):
         devices.append("/dev/dri")
     if os.path.exists("/dev/kfd"):
         devices.append("/dev/kfd")
-    for name in ("nvidia0", "nvidiactl", "nvidia-modeset", "nvidia-uvm", "nvidia-uvm-tools"):
-        path = f"/dev/{name}"
-        if os.path.exists(path):
-            devices.append(path)
+
     return devices
 
 
@@ -98,6 +115,22 @@ def build_run_args(
         else:
             warnings.append(f"Wayland socket not found at {wayland_sock}, skipping.")
 
+    # X11
+    if cfg.x11:
+        display = os.environ.get("DISPLAY", "")
+        x11_sock_dir = "/tmp/.X11-unix"
+        xauth_file = os.environ.get("XAUTHORITY", os.path.expanduser("~/.Xauthority"))
+
+        if display and os.path.isdir(x11_sock_dir):
+            args += ["-v", f"{x11_sock_dir}:{x11_sock_dir}:ro"]
+            args += ["-e", f"DISPLAY={display}"]
+            if os.path.exists(xauth_file):
+                container_xauth = "/tmp/.container-Xauthority"
+                args += ["-v", f"{xauth_file}:{container_xauth}:ro"]
+                args += ["-e", f"XAUTHORITY={container_xauth}"]
+        else:
+            warnings.append("x11 enabled but DISPLAY not set or X11 socket dir not found")
+
     # SSH
     if cfg.ssh:
         ssh_sock = os.environ.get("SSH_AUTH_SOCK", "")
@@ -137,8 +170,21 @@ def build_run_args(
 
     # GPU passthrough
     if cfg.gpu:
-        for dev in gpu_devices():
+        devs = gpu_devices()
+        for dev in devs:
             args += ["--device", dev]
+        if not devs:
+            warnings.append("GPU enabled but no GPU devices found on host.")
+        elif "/dev/dri" in devs:
+            # Check the render node, not the directory — /dev/dri is typically
+            # root-owned 755 but the device nodes inside have their own perms.
+            render_node = "/dev/dri/renderD128"
+            if os.path.exists(render_node) and not os.access(render_node, os.R_OK | os.W_OK):
+                warnings.append(
+                    "GPU enabled but /dev/dri/renderD128 is not accessible. "
+                    "Add your user to the 'video' and 'render' groups: "
+                    "sudo usermod -aG video,render $USER"
+                )
 
     # Extra devices
     for dev in cfg.devices:

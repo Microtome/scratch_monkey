@@ -42,6 +42,7 @@ class InstanceConfig:
 
     cmd: str = "/bin/bash"
     wayland: bool = False
+    x11: bool = False
     ssh: bool = False
     home: str = ""
     volumes: list[str] = field(default_factory=list)
@@ -81,6 +82,7 @@ def load(path: Path) -> InstanceConfig:
     config = InstanceConfig(
         cmd=str(data.get("cmd", "/bin/bash")),
         wayland=_bool(data.get("wayland", False)),
+        x11=_bool(data.get("x11", False)),
         ssh=_bool(data.get("ssh", False)),
         home=str(data.get("home", "")),
         volumes=_strlist(data.get("volumes", [])),
@@ -142,6 +144,7 @@ def _serialize(config: InstanceConfig) -> str:
 
     lines.append(f"cmd = {_toml_str(config.cmd)}\n")
     lines.append(f"wayland = {str(config.wayland).lower()}\n")
+    lines.append(f"x11 = {str(config.x11).lower()}\n")
     lines.append(f"ssh = {str(config.ssh).lower()}\n")
 
     if config.home:
