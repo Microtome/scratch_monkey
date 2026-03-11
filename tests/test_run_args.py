@@ -15,32 +15,73 @@ _real_expanduser = os.path.expanduser
 
 
 class TestGpuDevices:
-    def test_detects_dri(self, tmp_path):
-        with patch("os.path.exists", side_effect=lambda p: p == "/dev/dri"):
+    def test_detects_dri(self):
+        with (
+            patch("scratch_monkey.run_args.nvidia_cdi_available", return_value=False),
+            patch("os.path.exists", side_effect=lambda p: p == "/dev/dri"),
+        ):
             devices = gpu_devices()
         assert "/dev/dri" in devices
 
-    def test_detects_kfd(self, tmp_path):
-        with patch("os.path.exists", side_effect=lambda p: p == "/dev/kfd"):
+    def test_detects_kfd(self):
+        with (
+            patch("scratch_monkey.run_args.nvidia_cdi_available", return_value=False),
+            patch("os.path.exists", side_effect=lambda p: p == "/dev/kfd"),
+        ):
             devices = gpu_devices()
         assert "/dev/kfd" in devices
 
-    def test_detects_nvidia_devices(self):
+    def test_detects_nvidia_devices_no_cdi(self):
+        """Without CDI, individual /dev/nvidia* paths are returned."""
         nvidia_devs = {"/dev/nvidia0", "/dev/nvidiactl", "/dev/nvidia-modeset",
                        "/dev/nvidia-uvm", "/dev/nvidia-uvm-tools"}
-        with patch("os.path.exists", side_effect=lambda p: p in nvidia_devs):
+        with (
+            patch("scratch_monkey.run_args.nvidia_cdi_available", return_value=False),
+            patch("os.path.exists", side_effect=lambda p: p in nvidia_devs),
+        ):
             devices = gpu_devices()
         for dev in nvidia_devs:
             assert dev in devices
+        assert "nvidia.com/gpu=all" not in devices
+
+    def test_nvidia_cdi_returns_cdi_spec(self):
+        """With CDI available + NVIDIA GPU, returns CDI spec instead of raw paths."""
+        present = {"/dev/nvidia0", "/dev/dri", "/etc/cdi/nvidia.yaml"}
+        with (
+            patch("scratch_monkey.run_args.nvidia_cdi_available", return_value=True),
+            patch("os.path.exists", side_effect=lambda p: p in present),
+        ):
+            devices = gpu_devices()
+        assert "nvidia.com/gpu=all" in devices
+        assert "/dev/dri" in devices
+        # Raw nvidia paths should NOT be present when CDI is used
+        assert "/dev/nvidia0" not in devices
+        assert "/dev/nvidiactl" not in devices
+
+    def test_nvidia_cdi_without_gpu_falls_back(self):
+        """CDI yaml exists but no NVIDIA GPU — no CDI spec returned."""
+        with (
+            patch("scratch_monkey.run_args.nvidia_cdi_available", return_value=True),
+            patch("os.path.exists", side_effect=lambda p: p == "/dev/dri"),
+        ):
+            devices = gpu_devices()
+        assert "nvidia.com/gpu=all" not in devices
+        assert "/dev/dri" in devices
 
     def test_empty_when_no_gpu(self):
-        with patch("os.path.exists", return_value=False):
+        with (
+            patch("scratch_monkey.run_args.nvidia_cdi_available", return_value=False),
+            patch("os.path.exists", return_value=False),
+        ):
             devices = gpu_devices()
         assert devices == []
 
     def test_detects_multiple(self):
         present = {"/dev/dri", "/dev/kfd", "/dev/nvidia0"}
-        with patch("os.path.exists", side_effect=lambda p: p in present):
+        with (
+            patch("scratch_monkey.run_args.nvidia_cdi_available", return_value=False),
+            patch("os.path.exists", side_effect=lambda p: p in present),
+        ):
             devices = gpu_devices()
         assert "/dev/dri" in devices
         assert "/dev/kfd" in devices
@@ -108,6 +149,61 @@ class TestBuildRunArgsGpuAndDevices:
             args, _warnings = build_run_args(scratch_instance)
         assert "/dev/dri" in args
         assert "/dev/video0" in args
+
+    def test_gpu_cdi_device_spec(self, scratch_instance):
+        """CDI spec passed as --device when NVIDIA CDI is available."""
+        scratch_instance.config.gpu = True
+        with patch("scratch_monkey.run_args.gpu_devices", return_value=["nvidia.com/gpu=all", "/dev/dri"]):
+            args, _warnings = build_run_args(scratch_instance)
+        assert "nvidia.com/gpu=all" in args
+        assert "/dev/dri" in args
+        # Both should be preceded by --device
+        idx_cdi = args.index("nvidia.com/gpu=all")
+        assert args[idx_cdi - 1] == "--device"
+        idx_dri = args.index("/dev/dri")
+        assert args[idx_dri - 1] == "--device"
+
+    def test_gpu_warning_no_devices_found(self, scratch_instance):
+        """Warning when GPU enabled but no devices detected."""
+        scratch_instance.config.gpu = True
+        with patch("scratch_monkey.run_args.gpu_devices", return_value=[]):
+            _args, warnings = build_run_args(scratch_instance)
+        assert any("no GPU devices found" in w for w in warnings)
+
+    def test_gpu_warning_permission_denied(self, scratch_instance):
+        """Warning when GPU devices exist but render node is not accessible."""
+        scratch_instance.config.gpu = True
+
+        def mock_exists(path):
+            if path == "/dev/dri/renderD128":
+                return True
+            return _real_exists(path)
+
+        with (
+            patch("scratch_monkey.run_args.gpu_devices", return_value=["/dev/dri"]),
+            patch("scratch_monkey.run_args.os.path.exists", side_effect=mock_exists),
+            patch("scratch_monkey.run_args.os.access", return_value=False),
+        ):
+            _args, warnings = build_run_args(scratch_instance)
+        assert any("renderD128" in w and "not accessible" in w for w in warnings)
+        assert any("video" in w and "render" in w for w in warnings)
+
+    def test_gpu_no_warning_when_accessible(self, scratch_instance):
+        """No GPU warning when devices are present and render node accessible."""
+        scratch_instance.config.gpu = True
+
+        def mock_exists(path):
+            if path == "/dev/dri/renderD128":
+                return True
+            return _real_exists(path)
+
+        with (
+            patch("scratch_monkey.run_args.gpu_devices", return_value=["/dev/dri"]),
+            patch("scratch_monkey.run_args.os.path.exists", side_effect=mock_exists),
+            patch("scratch_monkey.run_args.os.access", return_value=True),
+        ):
+            _args, warnings = build_run_args(scratch_instance)
+        assert not any("GPU" in w for w in warnings)
 
 
 # ─── build_run_args shared volumes ────────────────────────────────────────────

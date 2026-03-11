@@ -94,6 +94,7 @@ scratch-monkey run   <name>               # same as enter
 scratch-monkey run   <name> --wayland     # override: enable Wayland
 scratch-monkey run   <name> --ssh         # override: enable SSH agent
 scratch-monkey run   <name> --x11         # override: enable X11 sharing
+scratch-monkey run   <name> --gpu         # override: enable GPU passthrough
 scratch-monkey run   <name> --cmd /bin/zsh
 
 scratch-monkey start <name>               # start overlay container (headless)
@@ -297,7 +298,7 @@ Fedora instances use their own filesystem — no host system mounts.
 | `edit <name>` | Edit instance files (`--file config\|dockerfile\|env`) |
 | `build` | Build the base image (`--fedora`) |
 | `build-instance <name>` | Build an instance's Dockerfile |
-| `run <name>` | Run an instance (`--root`, `--wayland`, `--ssh`, `--x11`, `--cmd`) |
+| `run <name>` | Run an instance (`--root`, `--wayland`, `--ssh`, `--x11`, `--gpu`, `--cmd`) |
 | `enter <name>` | Interactive shell (`--root` for root) |
 | `start <name>` | Start overlay container (creates if needed) |
 | `stop <name>` | Stop overlay container |

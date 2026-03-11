@@ -102,7 +102,9 @@ enamldef ConfigEditorPanel(Container): editor:
                 toggled ::
                     if editor.model:
                         editor.model.x11 = checked
-                tool_tip = "Forward X11 display socket and Xauthority for GUI applications"
+                        if checked and not editor.model.gpu:
+                            editor.model.gpu = True
+                tool_tip = "Forward X11 display socket and Xauthority for GUI applications. Automatically enables GPU passthrough."
 
             CheckBox:
                 text = "Overlay mode"
