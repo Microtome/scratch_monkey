@@ -144,6 +144,26 @@ class TestInstanceModelVolumes:
         cfg = m.to_config()
         assert cfg.volumes == ["/a:/b:rw", "/c:/d:ro"]
 
+    def test_to_config_filters_empty_volume_entries(self):
+        """Blank volume entries (both paths empty) are silently dropped."""
+        m = InstanceModel()
+        m.volume_entries = [
+            VolumeMountEntry(host_path="/a", container_path="/b", mode="ro"),
+            VolumeMountEntry(),  # blank — should be filtered
+            VolumeMountEntry(host_path="/c", container_path="/d", mode="rw"),
+        ]
+        cfg = m.to_config()
+        assert cfg.volumes == ["/a:/b:ro", "/c:/d:rw"]
+
+    def test_to_config_keeps_partially_filled_entry(self):
+        """Entry with only host_path filled is kept (validation catches it later)."""
+        m = InstanceModel()
+        m.volume_entries = [
+            VolumeMountEntry(host_path="/a", container_path="", mode="ro"),
+        ]
+        cfg = m.to_config()
+        assert len(cfg.volumes) == 1
+
     def test_to_config_serializes_shared_entries(self):
         m = InstanceModel()
         m.shared_entries = [

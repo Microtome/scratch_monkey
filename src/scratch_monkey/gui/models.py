@@ -193,7 +193,10 @@ class InstanceModel(Atom):
             ssh=self.ssh,
             x11=self.x11,
             home=self.home,
-            volumes=[e.to_spec() for e in self.volume_entries],
+            volumes=[
+                e.to_spec() for e in self.volume_entries
+                if e.host_path or e.container_path
+            ],
             env=list(self.env_vars),
             shared=[
                 f"{e.name}:{e.mode}" if e.mode != "rw" else e.name

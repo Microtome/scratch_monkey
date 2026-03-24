@@ -26,6 +26,21 @@ def generate_overlay_id() -> str:
     return f"sm-{secrets.token_hex(4)}"
 
 
+def validate_volume_spec(spec: str) -> None:
+    """Raise ConfigError if a volume spec has empty host or container path.
+
+    Accepts ``host:container`` or ``host:container:mode`` formats.
+    """
+    parts = spec.split(":")
+    if len(parts) < 2:
+        raise ConfigError(f"Invalid volume spec {spec!r}: expected host:container[:mode]")
+    host, container = parts[0], parts[1]
+    if not host:
+        raise ConfigError(f"Invalid volume spec {spec!r}: host path is empty")
+    if not container:
+        raise ConfigError(f"Invalid volume spec {spec!r}: container path is empty")
+
+
 def validate_name(name: str) -> None:
     """Raise ConfigError if name is not a valid instance name."""
     if not _NAME_RE.match(name):
@@ -106,6 +121,10 @@ def load(path: Path) -> InstanceConfig:
                 f"home path must not contain '..': {config.home!r}"
             )
 
+    # Validate volume specs
+    for vol in config.volumes:
+        validate_volume_spec(vol)
+
     return config
 
 
@@ -114,6 +133,10 @@ def save(path: Path, config: InstanceConfig) -> None:
 
     Writes to a temp file in the same directory, then renames.
     """
+    # Validate volume specs before persisting
+    for vol in config.volumes:
+        validate_volume_spec(vol)
+
     path = Path(path)
     content = _serialize(config)
     dir_ = path.parent
