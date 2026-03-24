@@ -6,6 +6,7 @@ import os
 import socket
 from pathlib import Path
 
+from .config import ConfigError, validate_volume_spec
 from .instance import Instance, is_fedora_based
 from .shared import parse_shared_entry
 
@@ -149,6 +150,11 @@ def build_run_args(
 
     # Extra volumes
     for vol in cfg.volumes:
+        try:
+            validate_volume_spec(vol)
+        except ConfigError:
+            warnings.append(f"Skipping invalid volume spec {vol!r}: empty host or container path.")
+            continue
         args += ["-v", vol]
 
     # Shared volumes

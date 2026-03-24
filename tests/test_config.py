@@ -13,7 +13,73 @@ from scratch_monkey.config import (
     load,
     save,
     validate_name,
+    validate_volume_spec,
 )
+
+# ─── validate_volume_spec ─────────────────────────────────────────────────────
+
+
+class TestValidateVolumeSpec:
+    def test_valid_host_container(self):
+        validate_volume_spec("/host:/container")  # should not raise
+
+    def test_valid_host_container_mode(self):
+        validate_volume_spec("/host:/container:ro")  # should not raise
+
+    def test_valid_rw_mode(self):
+        validate_volume_spec("/data:/mnt/data:rw")  # should not raise
+
+    def test_empty_host_raises(self):
+        with pytest.raises(ConfigError, match="host path is empty"):
+            validate_volume_spec(":/container:ro")
+
+    def test_empty_container_raises(self):
+        with pytest.raises(ConfigError, match="container path is empty"):
+            validate_volume_spec("/host::ro")
+
+    def test_both_empty_raises(self):
+        with pytest.raises(ConfigError, match="host path is empty"):
+            validate_volume_spec("::ro")
+
+    def test_single_element_raises(self):
+        with pytest.raises(ConfigError, match="expected host:container"):
+            validate_volume_spec("/only-one-path")
+
+
+class TestLoadVolumeValidation:
+    def test_load_rejects_empty_host(self, tmp_path):
+        toml = tmp_path / "scratch.toml"
+        toml.write_text('volumes = [":/container:ro"]\n')
+        with pytest.raises(ConfigError, match="host path is empty"):
+            load(toml)
+
+    def test_load_rejects_empty_container(self, tmp_path):
+        toml = tmp_path / "scratch.toml"
+        toml.write_text('volumes = ["/host::ro"]\n')
+        with pytest.raises(ConfigError, match="container path is empty"):
+            load(toml)
+
+    def test_load_accepts_valid_volumes(self, tmp_path):
+        toml = tmp_path / "scratch.toml"
+        toml.write_text('volumes = ["/a:/b:ro", "/c:/d"]\n')
+        cfg = load(toml)
+        assert cfg.volumes == ["/a:/b:ro", "/c:/d"]
+
+
+class TestSaveVolumeValidation:
+    def test_save_rejects_empty_volume_spec(self, tmp_path):
+        path = tmp_path / "scratch.toml"
+        cfg = InstanceConfig(volumes=["::ro"])
+        with pytest.raises(ConfigError, match="host path is empty"):
+            save(path, cfg)
+
+    def test_save_does_not_write_on_invalid_volume(self, tmp_path):
+        path = tmp_path / "scratch.toml"
+        cfg = InstanceConfig(volumes=[":/bad:ro"])
+        with pytest.raises(ConfigError):
+            save(path, cfg)
+        assert not path.exists()
+
 
 # ─── validate_name ────────────────────────────────────────────────────────────
 

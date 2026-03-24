@@ -274,6 +274,21 @@ class TestBuildRunArgsFeatures:
         args, _warnings = build_run_args(scratch_instance)
         assert "/host/path:/container/path" in args
 
+    def test_invalid_volume_skipped_with_warning(self, scratch_instance):
+        """Invalid volume specs are skipped instead of passed to podman."""
+        scratch_instance.config.volumes = ["::ro", "/valid:/path:ro"]
+        args, warnings = build_run_args(scratch_instance)
+        assert "::ro" not in args
+        assert "/valid:/path:ro" in args
+        assert any("Skipping invalid volume" in w for w in warnings)
+
+    def test_empty_host_volume_skipped(self, scratch_instance):
+        """Volume with empty host path is skipped with warning."""
+        scratch_instance.config.volumes = [":/container:ro"]
+        args, warnings = build_run_args(scratch_instance)
+        assert ":/container:ro" not in args
+        assert any("empty host or container" in w for w in warnings)
+
     def test_env_file_included_when_exists(self, scratch_instance):
         # .env already exists (created by fixture)
         args, _warnings = build_run_args(scratch_instance)
