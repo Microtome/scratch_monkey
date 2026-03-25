@@ -87,6 +87,29 @@ class TestGpuDevices:
         assert "/dev/kfd" in devices
         assert "/dev/nvidia0" in devices
 
+    def test_use_cdi_false_skips_cdi(self):
+        """use_cdi=False returns raw /dev paths even when CDI is available."""
+        present = {"/dev/nvidia0", "/dev/dri", "/etc/cdi/nvidia.yaml"}
+        with (
+            patch("scratch_monkey.run_args.nvidia_cdi_available", return_value=True),
+            patch("os.path.exists", side_effect=lambda p: p in present),
+        ):
+            devices = gpu_devices(use_cdi=False)
+        assert "nvidia.com/gpu=all" not in devices
+        assert "/dev/nvidia0" in devices
+        assert "/dev/dri" in devices
+
+    def test_use_cdi_true_uses_cdi(self):
+        """use_cdi=True (default) returns CDI spec when available."""
+        present = {"/dev/nvidia0", "/dev/dri", "/etc/cdi/nvidia.yaml"}
+        with (
+            patch("scratch_monkey.run_args.nvidia_cdi_available", return_value=True),
+            patch("os.path.exists", side_effect=lambda p: p in present),
+        ):
+            devices = gpu_devices(use_cdi=True)
+        assert "nvidia.com/gpu=all" in devices
+        assert "/dev/nvidia0" not in devices
+
 
 # ─── build_run_args userns ───────────────────────────────────────────────────
 
@@ -150,11 +173,11 @@ class TestBuildRunArgsGpuAndDevices:
         assert "/dev/dri" in args
         assert "/dev/video0" in args
 
-    def test_gpu_cdi_device_spec(self, scratch_instance):
-        """CDI spec passed as --device when NVIDIA CDI is available."""
-        scratch_instance.config.gpu = True
+    def test_gpu_cdi_device_spec(self, fedora_instance):
+        """CDI spec passed as --device for fedora instances when NVIDIA CDI is available."""
+        fedora_instance.config.gpu = True
         with patch("scratch_monkey.run_args.gpu_devices", return_value=["nvidia.com/gpu=all", "/dev/dri"]):
-            args, _warnings = build_run_args(scratch_instance)
+            args, _warnings = build_run_args(fedora_instance)
         assert "nvidia.com/gpu=all" in args
         assert "/dev/dri" in args
         # Both should be preceded by --device
@@ -162,6 +185,20 @@ class TestBuildRunArgsGpuAndDevices:
         assert args[idx_cdi - 1] == "--device"
         idx_dri = args.index("/dev/dri")
         assert args[idx_dri - 1] == "--device"
+
+    def test_scratch_instance_skips_cdi(self, scratch_instance):
+        """Scratch instances pass use_cdi=False — no CDI specs, only raw /dev paths."""
+        scratch_instance.config.gpu = True
+        with patch("scratch_monkey.run_args.gpu_devices", wraps=gpu_devices) as mock_gpu:
+            with (
+                patch("scratch_monkey.run_args.nvidia_cdi_available", return_value=True),
+                patch("scratch_monkey.run_args.os.path.exists",
+                       side_effect=lambda p: p in {"/dev/nvidia0", "/dev/dri"}),
+                patch("scratch_monkey.run_args.os.access", return_value=True),
+            ):
+                args, _warnings = build_run_args(scratch_instance)
+        mock_gpu.assert_called_once_with(use_cdi=False)
+        assert "nvidia.com/gpu=all" not in args
 
     def test_gpu_warning_no_devices_found(self, scratch_instance):
         """Warning when GPU enabled but no devices detected."""
@@ -319,12 +356,12 @@ class TestBuildRunArgsFeatures:
         assert "/etc:/etc:ro" in args
 
     def test_scratch_instance_has_tmpfs(self, scratch_instance):
-        """Scratch instances get tmpfs mounts for /tmp and /root."""
+        """Scratch instances get tmpfs mounts for /tmp and /root with mode=1777."""
         args, _warnings = build_run_args(scratch_instance)
         # Collect all tmpfs targets
         tmpfs_targets = [args[i + 1] for i in range(len(args)) if args[i] == "--tmpfs" and i + 1 < len(args)]
-        assert "/tmp" in tmpfs_targets
-        assert "/root" in tmpfs_targets
+        assert "/tmp:rw,nosuid,nodev,mode=1777" in tmpfs_targets
+        assert "/root:rw,nosuid,nodev,mode=1777" in tmpfs_targets
 
     def test_fedora_instance_no_tmpfs(self, fedora_instance):
         """Fedora instances do not get tmpfs mounts (they have their own)."""
