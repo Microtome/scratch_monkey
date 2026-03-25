@@ -29,16 +29,20 @@ def nvidia_cdi_available() -> bool:
     return os.path.exists("/etc/cdi/nvidia.yaml")
 
 
-def gpu_devices() -> list[str]:
+def gpu_devices(*, use_cdi: bool = True) -> list[str]:
     """Detect available GPU device paths.
 
-    Returns CDI device specs (e.g. "nvidia.com/gpu=all") when NVIDIA CDI is
-    available, otherwise falls back to raw /dev paths.
+    When use_cdi is True (default), returns CDI device specs (e.g.
+    "nvidia.com/gpu=all") when NVIDIA CDI is available.  When False,
+    always returns raw /dev paths — appropriate for scratch instances
+    where host /usr and /etc are already mounted and CDI file injection
+    is unnecessary (and can fail on stale CDI specs).
     """
     devices = []
 
-    # Prefer NVIDIA CDI — it handles device nodes, driver libs, and symlinks
-    if nvidia_cdi_available() and os.path.exists("/dev/nvidia0"):
+    # Prefer NVIDIA CDI — it handles device nodes, driver libs, and symlinks.
+    # Skip CDI for scratch instances: host mounts already provide driver files.
+    if use_cdi and nvidia_cdi_available() and os.path.exists("/dev/nvidia0"):
         devices.append("nvidia.com/gpu=all")
     else:
         # Manual NVIDIA device passthrough (no driver libs injected)
@@ -99,8 +103,8 @@ def build_run_args(
             "-v", "/var/usrlocal:/var/usrlocal:ro",
             "-v", "/var/opt:/var/opt:ro",
             "-v", "/var/usrlocal:/usr/local:ro",
-            "--tmpfs", "/tmp",
-            "--tmpfs", "/root",
+            "--tmpfs", "/tmp:rw,nosuid,nodev,mode=1777",
+            "--tmpfs", "/root:rw,nosuid,nodev,mode=1777",
         ]
 
     # Wayland
@@ -176,7 +180,7 @@ def build_run_args(
 
     # GPU passthrough
     if cfg.gpu:
-        devs = gpu_devices()
+        devs = gpu_devices(use_cdi=is_fedora)
         for dev in devs:
             args += ["--device", dev]
         if not devs:
