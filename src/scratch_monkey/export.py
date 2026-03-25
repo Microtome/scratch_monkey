@@ -9,6 +9,7 @@ import sys
 from pathlib import Path
 from string import Template
 
+from .config import InstanceConfig
 from .instance import Instance
 from .run_args import short_hostname
 
@@ -36,11 +37,12 @@ _SCRIPT_TEMPLATE = Template(
 if [ "$${SCRATCH_INSTANCE:-}" = "${instance_name}" ]; then
     exec ${cmd} "$$@"
 fi
-if podman container inspect "${overlay_name}" --format '{{.State.Status}}' 2>/dev/null | grep -q '^running$$'; then
+${display_setup}if podman container inspect "${overlay_name}" \\
+    --format '{{.State.Status}}' 2>/dev/null | grep -q '^running$$'; then
     if [ -t 1 ]; then
-        exec podman exec -it "${overlay_name}" ${cmd} "$$@"
+        exec podman exec -it $$_dexec "${overlay_name}" ${cmd} "$$@"
     else
-        exec podman exec -i "${overlay_name}" ${cmd} "$$@"
+        exec podman exec -i $$_dexec "${overlay_name}" ${cmd} "$$@"
     fi
 fi
 if podman image exists "${instance_name}" 2>/dev/null; then
@@ -57,9 +59,61 @@ exec podman run --rm -i $$_tty \\
     -e USER="${username}" \\
     -e SCRATCH_INSTANCE="${instance_name}" \\
     -v "${home_dir}:${container_home}" \\
+    $$_drun \\
     "$$_image" ${cmd} "$$@"
 """
 )
+
+
+def _build_display_setup(cfg: InstanceConfig) -> str:
+    """Build a shell snippet that sets ``_dexec`` and ``_drun`` variables.
+
+    ``_dexec`` holds ``-e`` flags for ``podman exec`` (env vars only —
+    sockets are already bind-mounted on the running overlay container).
+    ``_drun`` holds both ``-v`` and ``-e`` flags for ``podman run``
+    (fresh container, needs socket mounts *and* env vars).
+
+    The generated code checks the host environment at invocation time so
+    the forwarded values always reflect the current session.
+    """
+    lines: list[str] = ['_dexec=""', '_drun=""']
+
+    if cfg.wayland:
+        lines += [
+            '_uid="$(id -u)"',
+            'if [ -S "/run/user/$_uid/wayland-0" ]; then',
+            '    _dexec="$_dexec -e WAYLAND_DISPLAY=wayland-0 -e XDG_RUNTIME_DIR=/run/user/$_uid"',
+            '    _drun="$_drun -v /run/user/$_uid/wayland-0:/run/user/$_uid/wayland-0'
+            ' -e WAYLAND_DISPLAY=wayland-0 -e XDG_RUNTIME_DIR=/run/user/$_uid"',
+            "fi",
+        ]
+
+    if cfg.x11:
+        lines += [
+            'if [ -n "${DISPLAY:-}" ]; then',
+            '    _dexec="$_dexec -e DISPLAY=$DISPLAY"',
+            '    _drun="$_drun -e DISPLAY=$DISPLAY"',
+            '    if [ -d "/tmp/.X11-unix" ]; then',
+            '        _drun="$_drun -v /tmp/.X11-unix:/tmp/.X11-unix:ro"',
+            "    fi",
+            '    _xauth="${XAUTHORITY:-$HOME/.Xauthority}"',
+            '    if [ -f "$_xauth" ]; then',
+            '        _dexec="$_dexec -e XAUTHORITY=/tmp/.container-Xauthority"',
+            '        _drun="$_drun -v $_xauth:/tmp/.container-Xauthority:ro'
+            ' -e XAUTHORITY=/tmp/.container-Xauthority"',
+            "    fi",
+            "fi",
+        ]
+
+    if cfg.ssh:
+        lines += [
+            'if [ -n "${SSH_AUTH_SOCK:-}" ] && [ -S "$SSH_AUTH_SOCK" ]; then',
+            '    _dexec="$_dexec -e SSH_AUTH_SOCK=$SSH_AUTH_SOCK"',
+            '    _drun="$_drun -v $SSH_AUTH_SOCK:$SSH_AUTH_SOCK -e SSH_AUTH_SOCK=$SSH_AUTH_SOCK"',
+            "fi",
+        ]
+
+    return "\n".join(lines) + "\n"
 
 
 def export_command(
@@ -107,6 +161,7 @@ def export_command(
         container_home=container_home,
         username=username,
         home_dir=str(instance.home_dir),
+        display_setup=_build_display_setup(instance.config),
     )
 
     out_path.write_text(content)
