@@ -297,6 +297,68 @@ class TestExecShell:
         cmd_args = mock_runner.exec_interactive.call_args[0][1]
         assert "/bin/zsh" in cmd_args
 
+    def test_exec_forwards_wayland_env(self, scratch_instance, mock_runner):
+        """When wayland is enabled, exec passes WAYLAND_DISPLAY and XDG_RUNTIME_DIR."""
+        scratch_instance.config.wayland = True
+        with patch.dict(os.environ, {"USER": "testuser"}):
+            exec_shell(scratch_instance, mock_runner, "myinstance-overlay")
+        options = mock_runner.exec_interactive.call_args[1].get("options", [])
+        assert "-e" in options
+        assert "WAYLAND_DISPLAY=wayland-0" in options
+        # XDG_RUNTIME_DIR should match current uid
+        xdg_entries = [o for o in options if o.startswith("XDG_RUNTIME_DIR=")]
+        assert len(xdg_entries) == 1
+        assert xdg_entries[0] == f"XDG_RUNTIME_DIR=/run/user/{os.getuid()}"
+
+    def test_exec_forwards_x11_env(self, scratch_instance, mock_runner):
+        """When x11 is enabled and DISPLAY is set, exec passes DISPLAY and XAUTHORITY."""
+        scratch_instance.config.x11 = True
+        with (
+            patch.dict(os.environ, {"USER": "testuser", "DISPLAY": ":1"}),
+            patch("os.path.exists", return_value=True),
+        ):
+            exec_shell(scratch_instance, mock_runner, "myinstance-overlay")
+        options = mock_runner.exec_interactive.call_args[1].get("options", [])
+        assert "DISPLAY=:1" in options
+        assert "XAUTHORITY=/tmp/.container-Xauthority" in options
+
+    def test_exec_forwards_x11_no_xauthority(self, scratch_instance, mock_runner):
+        """When x11 is enabled but no xauth file exists, XAUTHORITY is omitted."""
+        scratch_instance.config.x11 = True
+        with (
+            patch.dict(os.environ, {"USER": "testuser", "DISPLAY": ":0"}),
+            patch("os.path.exists", return_value=False),
+            patch("os.path.expanduser", return_value="/home/testuser/.Xauthority"),
+        ):
+            exec_shell(scratch_instance, mock_runner, "myinstance-overlay")
+        options = mock_runner.exec_interactive.call_args[1].get("options", [])
+        assert "DISPLAY=:0" in options
+        xauth_entries = [o for o in options if "XAUTHORITY" in o]
+        assert len(xauth_entries) == 0
+
+    def test_exec_forwards_ssh_env(self, scratch_instance, mock_runner):
+        """When ssh is enabled and SSH_AUTH_SOCK is set, exec passes it."""
+        scratch_instance.config.ssh = True
+        with (
+            patch.dict(os.environ, {"USER": "testuser", "SSH_AUTH_SOCK": "/tmp/ssh-agent.sock"}),
+            patch("os.path.exists", return_value=True),
+        ):
+            exec_shell(scratch_instance, mock_runner, "myinstance-overlay")
+        options = mock_runner.exec_interactive.call_args[1].get("options", [])
+        assert "SSH_AUTH_SOCK=/tmp/ssh-agent.sock" in options
+
+    def test_exec_no_display_env_by_default(self, scratch_instance, mock_runner):
+        """When display sharing is disabled, no display vars in exec options."""
+        with patch.dict(os.environ, {"USER": "testuser"}):
+            exec_shell(scratch_instance, mock_runner, "myinstance-overlay")
+        options = mock_runner.exec_interactive.call_args[1].get("options", [])
+        for opt in options:
+            assert "WAYLAND_DISPLAY" not in opt
+            assert "XDG_RUNTIME_DIR" not in opt
+            assert "DISPLAY" not in opt
+            assert "XAUTHORITY" not in opt
+            assert "SSH_AUTH_SOCK" not in opt
+
 
 # ─── reset ────────────────────────────────────────────────────────────────────
 

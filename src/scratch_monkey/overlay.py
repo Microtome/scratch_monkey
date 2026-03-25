@@ -144,6 +144,26 @@ def exec_shell(
             "-e", f"SCRATCH_INSTANCE={instance.name}",
         ]
 
+    # Forward display/session env vars so graphical apps work inside the
+    # overlay.  The sockets are already bind-mounted at container creation
+    # time (via build_run_args), but the env vars must be set on each exec
+    # to reflect the current host state (DISPLAY can change between sessions).
+    cfg = instance.config
+    if cfg.wayland:
+        uid = os.getuid()
+        options += ["-e", "WAYLAND_DISPLAY=wayland-0", "-e", f"XDG_RUNTIME_DIR=/run/user/{uid}"]
+    if cfg.x11:
+        display = os.environ.get("DISPLAY", "")
+        if display:
+            options += ["-e", f"DISPLAY={display}"]
+            xauth_file = os.environ.get("XAUTHORITY", os.path.expanduser("~/.Xauthority"))
+            if os.path.exists(xauth_file):
+                options += ["-e", "XAUTHORITY=/tmp/.container-Xauthority"]
+    if cfg.ssh:
+        ssh_sock = os.environ.get("SSH_AUTH_SOCK", "")
+        if ssh_sock and os.path.exists(ssh_sock):
+            options += ["-e", f"SSH_AUTH_SOCK={ssh_sock}"]
+
     runner.exec_interactive(container_name, [cmd], options=options)
 
 
